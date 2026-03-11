@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<base href="https://revops-vps.tail8c3986.ts.net/pillar-matrix/">
+<title>Infiterra — Support Pillar Activation Matrix</title>
+<script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js" async></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: Arial, sans-serif; background: #FAFAFA; }
+  @media (max-width: 900px) {
+    .matrix-grid { grid-template-columns: 1.8fr 0.6fr repeat(4, 1fr) !important; font-size: 11px !important; }
+    .matrix-grid select { min-width: 80px !important; font-size: 10px !important; }
+    .header-row { flex-direction: column !important; align-items: flex-start !important; gap: 12px !important; }
+    .header-controls { align-items: flex-start !important; }
+    .summary-cards { flex-wrap: wrap !important; }
+    .summary-cards > div { min-width: 80px !important; }
+    .pillar-util-cards { flex-wrap: wrap !important; }
+    .pillar-util-cards > div { min-width: 100px !important; }
+    .filter-row { flex-wrap: wrap !important; }
+  }
+  @media (max-width: 600px) {
+    .matrix-grid { grid-template-columns: 1fr !important; }
+    .matrix-header-grid { display: none !important; }
+    .expanded-pillars { grid-template-columns: 1fr !important; }
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+var useState = React.useState;
+var useMemo = React.useMemo;
+var useEffect = React.useEffect;
+var useCallback = React.useCallback;
+var useRef = React.useRef;
+
+var PILLARS = [
+  { key: "abm", label: "ABM", icon: "\uD83D\uDCE3" },
+  { key: "sc", label: "Solutions Consultant", icon: "\uD83D\uDD27" },
+  { key: "pmm", label: "Product Marketing", icon: "\uD83D\uDCDD" },
+  { key: "csuite", label: "C-Suite / Exec", icon: "\uD83D\uDC54" },
+];
+
+var STATUS_ORDER = ["none", "not_needed", "requested", "planned", "active", "delivered", "blocked"];
+var STATUS = {
+  none: { label: "\u2014", bg: "#F5F5F5", text: "#AAA" },
+  not_needed: { label: "Not Needed", bg: "#E8E8E8", text: "#888" },
+  requested: { label: "Requested", bg: "#F39C12", text: "#fff" },
+  planned: { label: "Planned", bg: "#3498DB", text: "#fff" },
+  active: { label: "Active", bg: "#27AE60", text: "#fff" },
+  delivered: { label: "Delivered", bg: "#1B2A4A", text: "#fff" },
+  blocked: { label: "Blocked", bg: "#C0392B", text: "#fff" },
+};
+
+var mkP = function(status, note) { return { status: status, note: note || "" }; };
+
+var DEFAULT_PILLAR = { status: "none", note: "" };
+
+var ensurePillars = function(deal) {
+  if (!deal.pillars || Object.keys(deal.pillars).length === 0) {
+    deal.pillars = {
+      abm: Object.assign({}, DEFAULT_PILLAR),
+      sc: Object.assign({}, DEFAULT_PILLAR),
+      pmm: Object.assign({}, DEFAULT_PILLAR),
+      csuite: Object.assign({}, DEFAULT_PILLAR),
+    };
+  } else {
+    ["abm", "sc", "pmm", "csuite"].forEach(function(k) {
+      if (!deal.pillars[k]) {
+        deal.pillars[k] = Object.assign({}, DEFAULT_PILLAR);
+      } else if (deal.pillars[k].status === "ai_proposed" || deal.pillars[k].status === "ai_updated") {
+        deal.pillars[k].status = "none";
+      }
+    });
+  }
+  return deal;
+};
+
+var DATA_URL = "data.json";
+var SAVE_URL = "save";
+var REFRESH_URL = "refresh";
+var STORAGE_KEY = "pillar-matrix-deals";
+
+// ── Slide navigation (Office.js) ──
+var _isOfficeEnv = false;
+function initOfficeNav() {
+  if (window.Office && Office.context && Office.context.document) {
+    _isOfficeEnv = true;
+  }
+}
+function goToSlide(direction) {
+  if (!_isOfficeEnv) return;
+  try {
+    Office.context.document.goToByIdAsync(
+      direction === "next" ? Office.Index.Next : Office.Index.Previous,
+      Office.GoToType.Index,
+      function(result) {
+        if (result.status === Office.AsyncResultStatus.Failed) {
+          console.log("Slide nav:", result.error.message);
+        }
+      }
+    );
+  } catch (e) { console.log("Slide nav error:", e); }
+}
+
+var normaliseCategory = function(cat) {
+  if (!cat) return "Best Case";
+  var map = { "COMMIT": "Commit", "BEST_CASE": "Best Case", "PIPELINE": "Pipeline", "OMIT": "Not Forecasted", "CLOSED": "Closed Won" };
+  return map[cat] || cat;
+};
+var OWNER_MAP = {
+  "81211334": "Paul Maguire", "81609356": "Alex Martel", "79443557": "Rathan Yogi",
+  "76994415": "Scott Murphy", "76993551": "Miltos Antoniadis",
+};
+var normaliseRep = function(rep) { return OWNER_MAP[rep] || rep; };
+var categoryColor = function(cat) { return normaliseCategory(cat) === "Commit" ? { bg: "#1B2A4A", text: "#fff" } : { bg: "#5B7FA5", text: "#fff" }; };
+
+function PillarMatrix() {
+  var _useState1 = useState(null); var deals = _useState1[0]; var setDeals = _useState1[1];
+  var _useState2 = useState(false); var loaded = _useState2[0]; var setLoaded = _useState2[1];
+  var _useState3 = useState(true); var fetching = _useState3[0]; var setFetching = _useState3[1];
+  var _useState4 = useState(null); var fetchError = _useState4[0]; var setFetchError = _useState4[1];
+  var _useState5 = useState(null); var selectedDeal = _useState5[0]; var setSelectedDeal = _useState5[1];
+  var _useState6 = useState(null); var editingCell = _useState6[0]; var setEditingCell = _useState6[1];
+  var _useState7 = useState("All"); var quarterFilter = _useState7[0]; var setQuarterFilter = _useState7[1];
+  var _useState8 = useState("All"); var categoryFilter = _useState8[0]; var setCategoryFilter = _useState8[1];
+  var _useState9 = useState(null); var saveStatus = _useState9[0]; var setSaveStatus = _useState9[1];
+  var _useState10 = useState(null); var lastSaved = _useState10[0]; var setLastSaved = _useState10[1];
+  var _useState11 = useState(null); var analysedAt = _useState11[0]; var setAnalysedAt = _useState11[1];
+  var _useState12 = useState(false); var refreshing = _useState12[0]; var setRefreshing = _useState12[1];
+  var _useState13 = useState(false); var saving = _useState13[0]; var setSaving = _useState13[1];
+  var _useState14 = useState(""); var searchTerm = _useState14[0]; var setSearchTerm = _useState14[1];
+  var _useState15 = useState("name"); var sortField = _useState15[0]; var setSortField = _useState15[1];
+  var _useState16 = useState("asc"); var sortDir = _useState16[0]; var setSortDir = _useState16[1];
+
+  var fetchedDealsRef = useRef(null);
+
+  // Fetch data.json on mount
+  useEffect(function() {
+    var fullUrl = new URL(DATA_URL, window.location.href).href;
+    fetch(DATA_URL)
+      .then(function(res) {
+        if (!res.ok) throw new Error("HTTP " + res.status + " from " + fullUrl);
+        return res.json();
+      })
+      .then(function(data) {
+        if (!data.deals || !Array.isArray(data.deals)) {
+          throw new Error("Invalid JSON structure — expected a 'deals' array");
+        }
+        var processed = data.deals.map(function(d) { return ensurePillars(Object.assign({}, d)); });
+        fetchedDealsRef.current = processed;
+        setAnalysedAt(data.analysedAt || null);
+
+        // Check localStorage for saved overrides
+        try {
+          var raw = localStorage.getItem(STORAGE_KEY);
+          if (raw) {
+            var parsed = JSON.parse(raw);
+            if (parsed.deals && Array.isArray(parsed.deals)) {
+              // Merge: fetched data as base, localStorage overrides for locked statuses
+              var LOCKED = { "requested": true, "planned": true, "active": true, "delivered": true, "blocked": true };
+              var savedByName = {};
+              parsed.deals.forEach(function(d) { savedByName[d.name] = d; });
+
+              var merged = processed.map(function(incoming) {
+                var saved = savedByName[incoming.name];
+                if (!saved) return incoming;
+                var mergedPillars = {};
+                ["abm", "sc", "pmm", "csuite"].forEach(function(pk) {
+                  var savedP = (saved.pillars || {})[pk];
+                  var incP = incoming.pillars[pk];
+                  if (savedP && LOCKED[savedP.status]) {
+                    mergedPillars[pk] = savedP;
+                  } else {
+                    mergedPillars[pk] = incP;
+                  }
+                });
+                return Object.assign({}, incoming, { pillars: mergedPillars });
+              });
+
+              setDeals(merged);
+              setLastSaved(parsed.savedAt || null);
+              setFetching(false);
+              setLoaded(true);
+              return;
+            }
+          }
+        } catch (e) {}
+
+        setDeals(processed);
+        setFetching(false);
+        setLoaded(true);
+      })
+      .catch(function(err) {
+        setFetchError(err.message || "Unknown error loading " + fullUrl);
+        setFetching(false);
+      });
+  }, []);
+
+  // Auto-save to localStorage
+  useEffect(function() {
+    if (!loaded || !deals) return;
+    var t = setTimeout(function() {
+      try {
+        var now = new Date().toISOString();
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ deals: deals, savedAt: now }));
+        setLastSaved(now);
+        setSaveStatus("saved");
+        setTimeout(function() { setSaveStatus(null); }, 2000);
+      } catch (e) {
+        setSaveStatus("error");
+        setTimeout(function() { setSaveStatus(null); }, 3000);
+      }
+    }, 500);
+    return function() { clearTimeout(t); };
+  }, [deals, loaded]);
+
+  var exportJSON = useCallback(function() {
+    var data = {
+      exportedAt: new Date().toISOString(),
+      source: "Support Pillar Activation Matrix",
+      deals: deals.map(function(d) {
+        return {
+          name: d.name, hs_deal_id: d.hs_deal_id, rep: d.rep, amount: d.amount,
+          amount_home_currency: d.amount_home_currency, category: d.category,
+          stage: d.stage, closeDate: d.closeDate, quarter: d.quarter,
+          pillars: Object.fromEntries(Object.entries(d.pillars).map(function(entry) { return [entry[0], { status: entry[1].status, note: entry[1].note }]; })),
+        };
+      }),
+    };
+    var blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url; a.download = "pillar_matrix_" + new Date().toISOString().split("T")[0] + ".json"; a.click();
+    URL.revokeObjectURL(url);
+  }, [deals]);
+
+  var resetToDefaults = useCallback(function() {
+    if (!fetchedDealsRef.current) return;
+    if (!confirm("Reset all pillar statuses and notes to the last fetched data? This cannot be undone.")) return;
+    setDeals(fetchedDealsRef.current.map(function(d) { return Object.assign({}, d, { pillars: Object.assign({}, d.pillars) }); }));
+    localStorage.removeItem(STORAGE_KEY);
+    setLastSaved(null);
+  }, []);
+
+  var refreshFromHubSpot = useCallback(function() {
+    if (refreshing) return;
+    setRefreshing(true);
+    setSaveStatus(null);
+    fetch(REFRESH_URL, { method: "POST" })
+      .then(function(res) {
+        if (!res.ok) throw new Error("Refresh failed: HTTP " + res.status);
+        return res.json();
+      })
+      .then(function(data) {
+        if (data.deals && Array.isArray(data.deals)) {
+          var processed = data.deals.map(function(d) { return ensurePillars(Object.assign({}, d)); });
+          fetchedDealsRef.current = processed;
+          setAnalysedAt(data.refreshedAt || data.analysedAt || null);
+          setDeals(processed);
+          localStorage.removeItem(STORAGE_KEY);
+          setSaveStatus("refreshed");
+          setTimeout(function() { setSaveStatus(null); }, 3000);
+        }
+        setRefreshing(false);
+      })
+      .catch(function(err) {
+        alert("Refresh failed: " + err.message);
+        setRefreshing(false);
+      });
+  }, [refreshing]);
+
+  var saveToServer = useCallback(function() {
+    if (saving || !deals) return;
+    setSaving(true);
+    var payload = {
+      refreshedAt: new Date().toISOString(),
+      source: "Pillar Matrix UI",
+      deals: deals.map(function(d) {
+        return {
+          name: d.name, hs_deal_id: d.hs_deal_id, rep: d.rep, amount: d.amount,
+          amount_home_currency: d.amount_home_currency, category: d.category,
+          stage: d.stage, closeDate: d.closeDate, quarter: d.quarter,
+          is_won: d.is_won || false,
+          pillars: Object.fromEntries(Object.entries(d.pillars).map(function(entry) { return [entry[0], { status: entry[1].status, note: entry[1].note }]; })),
+        };
+      }),
+    };
+    fetch(SAVE_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    })
+      .then(function(res) {
+        if (!res.ok) throw new Error("Save failed: HTTP " + res.status);
+        setSaveStatus("saved-server");
+        setLastSaved(new Date().toISOString());
+        setTimeout(function() { setSaveStatus(null); }, 3000);
+        setSaving(false);
+      })
+      .catch(function(err) {
+        alert("Save to server failed: " + err.message + "\nChanges are saved locally.");
+        setSaving(false);
+      });
+  }, [saving, deals]);
+
+  var importJSON = useCallback(function() {
+    var input = document.createElement("input");
+    input.type = "file"; input.accept = ".json";
+    input.onchange = function(e) {
+      var file = e.target.files[0];
+      if (!file) return;
+      var reader = new FileReader();
+      reader.onload = function(ev) {
+        try {
+          var parsed = JSON.parse(ev.target.result);
+          if (parsed.deals && Array.isArray(parsed.deals)) {
+            var LOCKED = {"requested": true, "planned": true, "active": true, "delivered": true, "blocked": true};
+
+            setDeals(function(prev) {
+              var existingByName = {};
+              prev.forEach(function(d) { existingByName[d.name] = d; });
+
+              var merged = parsed.deals.map(function(incoming) {
+                ensurePillars(incoming);
+                var existing = existingByName[incoming.name];
+                if (!existing) return incoming;
+
+                var exPillars = existing.pillars || {};
+                var mergedPillars = {};
+                ["abm", "sc", "pmm", "csuite"].forEach(function(pk) {
+                  var curr = exPillars[pk];
+                  var inc = (incoming.pillars || {})[pk];
+                  if (curr && LOCKED[curr.status]) {
+                    mergedPillars[pk] = curr;
+                  } else if (inc) {
+                    mergedPillars[pk] = inc;
+                  } else if (curr) {
+                    mergedPillars[pk] = curr;
+                  }
+                });
+
+                return Object.assign({}, incoming, {pillars: mergedPillars});
+              });
+
+              var incomingNames = {};
+              parsed.deals.forEach(function(d) { incomingNames[d.name] = true; });
+              prev.forEach(function(d) {
+                if (!incomingNames[d.name]) merged.push(d);
+              });
+
+              return merged;
+            });
+            setSaveStatus("saved");
+            alert("Imported " + parsed.deals.length + " deals (merged \u2014 locked statuses preserved).");
+          } else { alert("Invalid file format."); }
+        } catch (err) { alert("Failed to parse JSON file: " + err.message); }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  }, []);
+
+  var toggleSort = function(field) {
+    if (sortField === field) {
+      setSortDir(sortDir === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortDir(field === "amount" ? "desc" : "asc");
+    }
+  };
+
+  var filteredDeals = useMemo(function() {
+    if (!deals) return [];
+    var result = deals.filter(function(d) {
+      if (quarterFilter !== "All" && d.quarter !== quarterFilter) return false;
+      if (categoryFilter !== "All" && normaliseCategory(d.category) !== categoryFilter) return false;
+      if (searchTerm) {
+        var term = searchTerm.toLowerCase();
+        var nameMatch = (d.name || "").toLowerCase().indexOf(term) >= 0;
+        var repMatch = (normaliseRep(d.rep) || "").toLowerCase().indexOf(term) >= 0;
+        if (!nameMatch && !repMatch) return false;
+      }
+      return true;
+    });
+
+    result.sort(function(a, b) {
+      var dir = sortDir === "asc" ? 1 : -1;
+      if (sortField === "amount") {
+        return dir * ((a.amount_home_currency || 0) - (b.amount_home_currency || 0));
+      }
+      if (sortField === "closeDate") {
+        return dir * ((a.closeDate || "").localeCompare(b.closeDate || ""));
+      }
+      if (sortField === "rep") {
+        return dir * (normaliseRep(a.rep).localeCompare(normaliseRep(b.rep)));
+      }
+      return dir * ((a.name || "").localeCompare(b.name || ""));
+    });
+
+    return result;
+  }, [deals, quarterFilter, categoryFilter, searchTerm, sortField, sortDir]);
+
+  var handleStatusChange = function(dealName, pillarKey, newStatus) {
+    setDeals(function(prev) { return prev.map(function(d) {
+      if (d.name !== dealName) return d;
+      var newPillars = Object.assign({}, d.pillars);
+      newPillars[pillarKey] = Object.assign({}, d.pillars[pillarKey], { status: newStatus });
+      return Object.assign({}, d, { pillars: newPillars });
+    }); });
+  };
+
+  var handleNoteEdit = function(dealName, pillarKey, newNote) {
+    setDeals(function(prev) { return prev.map(function(d) {
+      if (d.name !== dealName) return d;
+      var newPillars = Object.assign({}, d.pillars);
+      newPillars[pillarKey] = Object.assign({}, d.pillars[pillarKey], { note: newNote });
+      return Object.assign({}, d, { pillars: newPillars });
+    }); });
+  };
+
+  var stats = useMemo(function() {
+    var requested = 0, planned = 0, active = 0, delivered = 0, blocked = 0;
+    filteredDeals.forEach(function(d) { Object.values(d.pillars).forEach(function(p) {
+      if (p.status === "requested") requested++;
+      if (p.status === "planned") planned++;
+      if (p.status === "active") active++;
+      if (p.status === "delivered") delivered++;
+      if (p.status === "blocked") blocked++;
+    }); });
+    return { requested: requested, planned: planned, active: active, delivered: delivered, blocked: blocked };
+  }, [filteredDeals]);
+
+  var pillarUtil = useMemo(function() {
+    return PILLARS.map(function(p) {
+      var requested = 0, planned = 0, active = 0, delivered = 0;
+      filteredDeals.forEach(function(d) {
+        var s = d.pillars[p.key].status;
+        if (s === "requested") requested++;
+        if (s === "planned") planned++;
+        if (s === "active") active++;
+        if (s === "delivered") delivered++;
+      });
+      return Object.assign({}, p, { requested: requested, planned: planned, active: active, delivered: delivered });
+    });
+  }, [filteredDeals]);
+
+  var totalValue = useMemo(function() {
+    return filteredDeals.reduce(function(s, d) {
+      var amt = typeof d.amount === "string" ? parseFloat(d.amount.replace(/[^0-9.\-]/g, "")) : (d.amount || 0);
+      return s + (amt || 0);
+    }, 0);
+  }, [filteredDeals]);
+
+  var formatAmount = function(d) {
+    if (typeof d.amount === "string") return d.amount;
+    if (typeof d.amount === "number") return "\u20AC" + d.amount.toLocaleString();
+    return "\u20AC0";
+  };
+
+  // --- Loading state ---
+  if (fetching) {
+    return (
+      <div style={{ padding: 80, textAlign: "center" }}>
+        <div style={{ fontSize: 32, marginBottom: 16 }}>{"\uD83D\uDD04"}</div>
+        <div style={{ fontSize: 16, color: "#1B2A4A", fontWeight: 600, marginBottom: 8 }}>Loading Pillar Matrix...</div>
+        <div style={{ fontSize: 13, color: "#888" }}>Fetching deal data from <code>{DATA_URL}</code></div>
+      </div>
+    );
+  }
+
+  // --- Error state ---
+  if (fetchError) {
+    var fullUrl = "";
+    try { fullUrl = new URL(DATA_URL, window.location.href).href; } catch(e) { fullUrl = DATA_URL; }
+    return (
+      <div style={{ padding: 80, textAlign: "center" }}>
+        <div style={{ fontSize: 32, marginBottom: 16 }}>{"\u26A0\uFE0F"}</div>
+        <div style={{ fontSize: 16, color: "#C0392B", fontWeight: 600, marginBottom: 8 }}>Failed to load data</div>
+        <div style={{ fontSize: 13, color: "#666", marginBottom: 16 }}>{fetchError}</div>
+        <div style={{ fontSize: 12, color: "#999", marginBottom: 20 }}>
+          Tried to fetch: <code style={{ background: "#F0F0F0", padding: "2px 6px", borderRadius: 4 }}>{fullUrl}</code>
+        </div>
+        <button onClick={function() { window.location.reload(); }}
+          style={{ padding: "10px 24px", background: "#1B2A4A", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 14, fontWeight: 600 }}>
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  if (!loaded || !deals) return <div style={{ padding: 48, textAlign: "center", color: "#888" }}>Loading...</div>;
+
+  return (
+    <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 40px 32px", minHeight: "100%" }}>
+      {/* Header */}
+      <div className="header-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 8 }}>
+            <div style={{ background: "#1B2A4A", borderRadius: 8, padding: "8px 14px", display: "flex", alignItems: "center" }}>
+              <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGlkPSJMYXllcl8xIiB2aWV3Qm94PSIwIDAgNDA0LjQ3IDQ2LjA1NCI+PGRlZnM+PHN0eWxlPiAgICAgIC5zdDAgeyAgICAgICAgZmlsbDogI2VkMzE1MzsgICAgICB9ICAgICAgLnN0MSB7ICAgICAgICBmaWxsOiAjZmZmOyAgICAgIH0gICAgPC9zdHlsZT48L2RlZnM+PHBhdGggY2xhc3M9InN0MSIgZD0iTTM2OC42MDEtMjI3LjgyOWMtOC43NDEtMTYuMTMzLTIxLjc5OC0yNS4zODUtMzUuODIyLTI1LjM4NWgtMi42MjRjLTEuMjk3LDAtMS41NTkuMjYyLTEuNTU5LDEuNTU5djE3LjMwOWMwLDEuMjk3LjI2MiwxLjU1OSwxLjU1OSwxLjU1OWgyLjYyNGM2Ljc3NCwwLDEyLjMzNCw2LjQ1OSwxNS4wNDUsMTAuMzEsNi4zMzMsOC45OTEsOS45NjUsMjEuODcyLDkuOTY1LDM1LjM0LDAsMjAuNzU3LTguMzgsMzYuMjQ2LTE2LjY4NSw0Mi4zODctMS4zODQsMS4wMjMtMy4zMTcuODM1LTQuNDc3LS40MzZsLTk3LjA4NS0xMDYuMzU2Yy0xLjMyMy0xLjQ1LTIuMjE3LTEuNDY2LTIuNTEtMS40NzEtMjUuMDUyLDAtNDUuNDg0LDI5LjY0My00NS40ODQsNjYuMDc4LDAsMTQuODgxLDMuMzYyLDI4Ljk1MSw5LjcyMyw0MC42OTEsOC43NDEsMTYuMTMzLDIxLjc5OCwyNS4zODYsMzUuODIyLDI1LjM4NmgyLjYyNGMxLjI5NywwLDEuNTU5LS4yNjIsMS41NTktMS41NTl2LTE3LjMxYzAtMS4yOTctLjI2Mi0xLjU1OS0xLjU1OS0xLjU1OWgtMi42MjRjLTYuNzc0LDAtMTIuMzM0LTYuNDU5LTE1LjA0NS0xMC4zMS02LjMzMy04Ljk5MS05Ljk2NS0yMS44NzItOS45NjUtMzUuMzM5LDAtMjEuNjc3LDguNzM0LTM2LjE4OCwxNi4yMTQtNDIuMDI4LDEuMzg0LTEuMDc5LDMuMzY0LS45MTIsNC41NDcuMzgzbDk2Ljk4OSwxMDYuMjUyYzEuMTMsMS4yMzgsMS4zMzksMS4yODIsMi45MjQsMS4yNjgsMjUuMTM1LDAsNDUuNTY3LTI5LjY0Miw0NS41NjctNjYuMDc2LDAtMTQuODgxLTMuMzYyLTI4Ljk1Mi05LjcyMy00MC42OTFaIj48L3BhdGg+PGc+PHBhdGggY2xhc3M9InN0MSIgZD0iTTAsMGg2LjUzMnMwLDQ2LjA1NCwwLDQ2LjA1NEgwUzAsMCwwLDBaIj48L3BhdGg+PHBhdGggY2xhc3M9InN0MSIgZD0iTTk5LjMyNiwwaDMwLjMxNnMwLDUuNzQsMCw1Ljc0aC0yMy43ODRzMCwxNC42ODQsMCwxNC42ODRoMjAuODczczAsNS43NCwwLDUuNzRoLTIwLjg3M3MwLDE5Ljg5LDAsMTkuODloLTYuNTMyczAtNDYuMDU0LDAtNDYuMDU0WiI+PC9wYXRoPjxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0xNDMuNTg2LDBoNi41MzJzMCw0Ni4wNTQsMCw0Ni4wNTRoLTYuNTMyczAtNDYuMDU0LDAtNDYuMDU0WiI+PC9wYXRoPjxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0xNzguODMsNS43NGgtMTQuNzY3czAtNS43NCwwLTUuNzRoMzYuMDY2czAsNS43NCwwLDUuNzRoLTE0Ljc2N3MwLDQwLjMxNCwwLDQwLjMxNGgtNi41MzJzMC00MC4zMTQsMC00MC4zMTRaIj48L3BhdGg+PHBhdGggY2xhc3M9InN0MSIgZD0iTTIxNC4wNzUsMGgzMS4zOHMwLDUuNzQsMCw1Ljc0aC0yNC44NDlzMCwxNC4yODMsMCwxNC4yODNoMjIuNTA2czAsNS43NCwwLDUuNzRoLTIyLjUwNnMwLDE0LjU1LDAsMTQuNTVoMjUuMjA0czAsNS43NCwwLDUuNzRoLTMxLjczNnMwLTQ2LjA1NCwwLTQ2LjA1NFoiPjwvcGF0aD48cGF0aCBjbGFzcz0ic3QxIiBkPSJNMjU5Ljc1NSwwaDIwLjk0NGM4LjczMywwLDE1LjMzNSw2LjAwNywxNS4zMzUsMTQuMDE2LDAsNy4yMDktNS40NjcsMTIuNjgyLTEyLjkyMSwxMy42MTZsMTQuMzQxLDE4LjQyMmgtOC4wOTRzLTEzLjk4Ni0xOC4yODgtMTMuOTg2LTE4LjI4OGgtOS4wODhzMCwxOC4yODgsMCwxOC4yODhoLTYuNTMyczAtNDYuMDU0LDAtNDYuMDU0Wk0yNjYuMjg3LDUuNzR2MTYuNjg2czE0LjM0MiwwLDE0LjM0MiwwYzQuOTcsMCw4LjczMi0zLjUzOCw4LjczMi04LjM0MywwLTQuODA1LTMuNzYzLTguMzQzLTguNzMyLTguMzQzaC0xNC4zNDJaIj48L3BhdGg+PHBhdGggY2xhc3M9InN0MSIgZD0iTTMxMS40LDBoMjAuOTQ0YzguNzMzLDAsMTUuMzM1LDYuMDA3LDE1LjMzNSwxNC4wMTYsMCw3LjIwOS01LjQ2NywxMi42ODItMTIuOTIxLDEzLjYxNmwxNC4zNDEsMTguNDIyaC04LjA5NHMtMTMuOTg2LTE4LjI4OC0xMy45ODYtMTguMjg4aC05LjA4OHMwLDE4LjI4OCwwLDE4LjI4OGgtNi41MzJzMC00Ni4wNTQsMC00Ni4wNTRaTTMxNy45MzIsNS43NHYxNi42ODZzMTQuMzQyLDAsMTQuMzQyLDBjNC45NywwLDguNzMyLTMuNTM4LDguNzMyLTguMzQzLDAtNC44MDUtMy43NjMtOC4zNDMtOC43MzItOC4zNDNoLTE0LjM0MloiPjwvcGF0aD48cGF0aCBjbGFzcz0ic3QxIiBkPSJNMzc2Ljc4MSwwaDcuNzM5czE5Ljk1LDQ2LjA1NCwxOS45NSw0Ni4wNTRoLTcuMTcxcy00Ljc1Ny0xMS4xNDYtNC43NTctMTEuMTQ2aC0yMy45OTdzLTQuNzU3LDExLjE0Ni00Ljc1NywxMS4xNDZoLTYuOTU4UzM3Ni43ODEsMCwzNzYuNzgxLDBaTTM5MC4xMjgsMjkuMjM0bC05LjU4NC0yMi41Ni05LjU4NSwyMi41NmgxOS4xNjlaIj48L3BhdGg+PHBhdGggY2xhc3M9InN0MCIgZD0iTTgyLjAwMiw4LjgyMUM3OC45NjQsMy4yMTUsNzQuNDI3LDAsNjkuNTU0LDBoLS45MTJjLS40NTEsMC0uNTQyLjA5MS0uNTQyLjU0MnY2LjAxNWMwLC40NTEuMDkxLjU0Mi41NDIuNTQyaC45MTJjMi4zNTQsMCw0LjI4NiwyLjI0NSw1LjIyOCwzLjU4MywyLjIwMSwzLjEyNCwzLjQ2Myw3LjYsMy40NjMsMTIuMjgsMCw3LjIxMy0yLjkxMiwxMi41OTUtNS43OTgsMTQuNzI5LS40ODEuMzU2LTEuMTUzLjI5LTEuNTU2LS4xNTFMMzcuMTU0LjU4MWMtLjQ2LS41MDQtLjc3LS41MDktLjg3Mi0uNTExLTguNzA2LDAtMTUuODA1LDEwLjMwMS0xNS44MDUsMjIuOTYyLDAsNS4xNzEsMS4xNjgsMTAuMDYsMy4zNzksMTQuMTQsMy4wMzgsNS42MDYsNy41NzUsOC44MjEsMTIuNDQ4LDguODIxaC45MTJjLjQ1MSwwLC41NDItLjA5MS41NDItLjU0MnYtNi4wMTVjMC0uNDUxLS4wOTEtLjU0Mi0uNTQyLS41NDJoLS45MTJjLTIuMzU0LDAtNC4yODYtMi4yNDUtNS4yMjgtMy41ODMtMi4yMDEtMy4xMjQtMy40NjMtNy42LTMuNDYzLTEyLjI4LDAtNy41MzMsMy4wMzUtMTIuNTc1LDUuNjM0LTE0LjYwNC40ODEtLjM3NSwxLjE2OS0uMzE3LDEuNTguMTMzbDMzLjcwMywzNi45MjJjLjM5My40My40NjUuNDQ1LDEuMDE2LjQ0MSw4LjczNCwwLDE1LjgzNC0xMC4zLDE1LjgzNC0yMi45NjEsMC01LjE3MS0xLjE2OC0xMC4wNjEtMy4zNzktMTQuMTRaIj48L3BhdGg+PC9nPjwvc3ZnPg==" alt="Infiterra" style={{ height: 22, display: "block" }} />
+            </div>
+            <h1 style={{ fontSize: 28, color: "#1B2A4A", fontWeight: 700 }}>Support Pillar Activation Matrix</h1>
+          </div>
+          <p style={{ fontSize: 13, color: "#666", marginTop: 4 }}>
+            Infiterra RevOps · Weekly Forecast Call — FY26 | Click rows to expand · Use dropdowns to set status · Notes editable inline
+          </p>
+          <div style={{ fontSize: 11, color: "#999", marginTop: 6, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            {analysedAt && <span>Data refreshed: {new Date(analysedAt).toLocaleString()}</span>}
+            {analysedAt && lastSaved && <span style={{ color: "#DDD" }}>|</span>}
+            {lastSaved && <span>Last saved: {new Date(lastSaved).toLocaleString()}</span>}
+            {saveStatus === "saved" && <span style={{ color: "#27AE60", fontWeight: 600 }}>{"\u2713"} Auto-saved locally</span>}
+            {saveStatus === "saved-server" && <span style={{ color: "#3498DB", fontWeight: 600 }}>{"\u2713"} Saved to server</span>}
+            {saveStatus === "refreshed" && <span style={{ color: "#27AE60", fontWeight: 600 }}>{"\u2713"} Refreshed from HubSpot</span>}
+            {saveStatus === "error" && <span style={{ color: "#C0392B", fontWeight: 600 }}>Save failed</span>}
+          </div>
+        </div>
+        <div className="header-controls" style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "flex-end" }}>
+          <div className="filter-row" style={{ display: "flex", gap: 8 }}>
+            {["All", "Q1", "Q2", "Q3", "Q4"].map(function(q) {
+              return (
+                <button key={q} onClick={function() { setQuarterFilter(q); setSelectedDeal(null); }}
+                  style={{ padding: "7px 16px", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, borderRadius: 6,
+                    background: quarterFilter === q ? "#1B2A4A" : "#E8E8E8", color: quarterFilter === q ? "#fff" : "#555", transition: "all 0.15s" }}>
+                  {q}
+                </button>
+              );
+            })}
+            <div style={{ width: 1, background: "#DDD", margin: "0 4px" }} />
+            {["All", "Commit", "Best Case", "Pipeline"].map(function(c) {
+              return (
+                <button key={c} onClick={function() { setCategoryFilter(c); setSelectedDeal(null); }}
+                  style={{ padding: "7px 16px", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, borderRadius: 6,
+                    background: categoryFilter === c ? "#5B7FA5" : "#E8E8E8", color: categoryFilter === c ? "#fff" : "#555", transition: "all 0.15s" }}>
+                  {c}
+                </button>
+              );
+            })}
+          </div>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button onClick={refreshFromHubSpot} disabled={refreshing}
+              style={{ padding: "6px 14px", border: "none", borderRadius: 6, background: refreshing ? "#95a5a6" : "#27AE60", cursor: refreshing ? "wait" : "pointer", fontSize: 12, fontWeight: 600, color: "#fff" }}>
+              {refreshing ? "Refreshing..." : "\u21BB Refresh"}
+            </button>
+            <button onClick={saveToServer} disabled={saving}
+              style={{ padding: "6px 14px", border: "none", borderRadius: 6, background: saving ? "#95a5a6" : "#3498DB", cursor: saving ? "wait" : "pointer", fontSize: 12, fontWeight: 600, color: "#fff" }}>
+              {saving ? "Saving..." : "\u2601 Save"}
+            </button>
+            <div style={{ width: 1, background: "#DDD", margin: "0 2px" }} />
+            <button onClick={importJSON}
+              style={{ padding: "6px 14px", border: "1px solid #CCC", borderRadius: 6, background: "#fff", cursor: "pointer", fontSize: 12, fontWeight: 600, color: "#1B2A4A" }}>
+              {"\u2B06"} Import
+            </button>
+            <button onClick={exportJSON}
+              style={{ padding: "6px 14px", border: "1px solid #CCC", borderRadius: 6, background: "#fff", cursor: "pointer", fontSize: 12, fontWeight: 600, color: "#1B2A4A" }}>
+              {"\u2B07"} Export
+            </button>
+            <button onClick={resetToDefaults}
+              style={{ padding: "6px 14px", border: "1px solid #DDD", borderRadius: 6, background: "#fff", cursor: "pointer", fontSize: 12, color: "#999" }}>
+              Reset
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Search & Sort */}
+      <div style={{ display: "flex", gap: 12, marginBottom: 16, alignItems: "center", flexWrap: "wrap" }}>
+        <div style={{ position: "relative", flex: "1 1 240px", maxWidth: 320 }}>
+          <input type="text" placeholder="Search deals or reps..." value={searchTerm}
+            onChange={function(e) { setSearchTerm(e.target.value); }}
+            style={{ width: "100%", padding: "9px 14px 9px 36px", border: "1px solid #DDD", borderRadius: 8, fontSize: 13, outline: "none", background: "#fff" }}
+          />
+          <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", fontSize: 14, color: "#AAA" }}>{"\uD83D\uDD0D"}</span>
+        </div>
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <span style={{ fontSize: 12, color: "#888" }}>Sort:</span>
+          {[
+            { key: "name", label: "Name" },
+            { key: "amount", label: "Amount" },
+            { key: "closeDate", label: "Close Date" },
+            { key: "rep", label: "Rep" },
+          ].map(function(s) {
+            var isActive = sortField === s.key;
+            return (
+              <button key={s.key} onClick={function() { toggleSort(s.key); }}
+                style={{ padding: "5px 12px", border: "1px solid " + (isActive ? "#1B2A4A" : "#DDD"), borderRadius: 6, background: isActive ? "#1B2A4A" : "#fff", color: isActive ? "#fff" : "#555", cursor: "pointer", fontSize: 12, fontWeight: isActive ? 600 : 400 }}>
+                {s.label}{isActive ? (sortDir === "asc" ? " \u2191" : " \u2193") : ""}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Summary */}
+      <div className="summary-cards" style={{ display: "flex", gap: 12, marginBottom: 20 }}>
+        {[
+          { n: stats.requested, label: "Requested", bg: "#F39C12" },
+          { n: stats.planned, label: "Planned", bg: "#3498DB" },
+          { n: stats.active, label: "Active", bg: "#27AE60" },
+          { n: stats.delivered, label: "Delivered", bg: "#1B2A4A" },
+          { n: stats.blocked, label: "Blocked", bg: "#C0392B" },
+        ].map(function(s) {
+          return (
+            <div key={s.label} style={{ flex: 1, background: s.bg, borderRadius: 10, padding: "12px 16px", color: "#fff" }}>
+              <div style={{ fontSize: 28, fontWeight: 700 }}>{s.n}</div>
+              <div style={{ fontSize: 11, opacity: 0.9 }}>{s.label}</div>
+            </div>
+          );
+        })}
+        <div style={{ flex: 1, background: "#fff", border: "1px solid #E0E0E0", borderRadius: 10, padding: "12px 16px" }}>
+          <div style={{ fontSize: 28, fontWeight: 700, color: "#1B2A4A" }}>{filteredDeals.length}</div>
+          <div style={{ fontSize: 11, color: "#666" }}>{"Deals \u00B7 \u20AC" + totalValue.toLocaleString()}</div>
+        </div>
+      </div>
+
+      {/* Pillar utilisation */}
+      <div className="pillar-util-cards" style={{ display: "flex", gap: 12, marginBottom: 24 }}>
+        {pillarUtil.map(function(p) {
+          return (
+            <div key={p.key} style={{ flex: 1, background: "#fff", border: "1px solid #E0E0E0", borderRadius: 10, padding: "10px 12px", textAlign: "center" }}>
+              <div style={{ fontSize: 22, marginBottom: 2 }}>{p.icon}</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#1B2A4A", marginBottom: 4 }}>{p.label}</div>
+              <div style={{ display: "flex", justifyContent: "center", gap: 8, flexWrap: "wrap" }}>
+                {p.requested > 0 && <span style={{ fontSize: 11, color: "#F39C12", fontWeight: 600 }}>{p.requested + " requested"}</span>}
+                {p.planned > 0 && <span style={{ fontSize: 11, color: "#3498DB", fontWeight: 600 }}>{p.planned + " planned"}</span>}
+                {p.active > 0 && <span style={{ fontSize: 11, color: "#27AE60", fontWeight: 600 }}>{p.active + " active"}</span>}
+                {p.delivered > 0 && <span style={{ fontSize: 11, color: "#1B2A4A", fontWeight: 600 }}>{p.delivered + " delivered"}</span>}
+                {p.requested === 0 && p.planned === 0 && p.active === 0 && p.delivered === 0 && <span style={{ fontSize: 11, color: "#BBB" }}>{"\u2014"}</span>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Matrix */}
+      <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #E0E0E0", overflow: "hidden", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
+        <div className="matrix-grid matrix-header-grid" style={{ display: "grid", gridTemplateColumns: "2.4fr 0.8fr repeat(4, 1fr)", background: "#1B2A4A", padding: "12px 18px", gap: 8, alignItems: "center" }}>
+          <div style={{ color: "#fff", fontSize: 12, fontWeight: 700 }}>Deal</div>
+          <div style={{ color: "#fff", fontSize: 12, fontWeight: 700, textAlign: "center" }}>Category</div>
+          {PILLARS.map(function(p) {
+            return <div key={p.key} style={{ color: "#fff", fontSize: 11, fontWeight: 700, textAlign: "center" }}>{p.icon + " " + p.label}</div>;
+          })}
+        </div>
+
+        {filteredDeals.length === 0 && (
+          <div style={{ padding: 40, textAlign: "center", color: "#999", fontSize: 14 }}>No deals match filters.</div>
+        )}
+
+        {filteredDeals.map(function(deal, di) {
+          var isExp = selectedDeal === deal.name;
+          var catS = categoryColor(deal.category);
+          return (
+            <div key={deal.name}>
+              <div onClick={function() { setSelectedDeal(isExp ? null : deal.name); }}
+                className="matrix-grid"
+                style={{
+                  display: "grid", gridTemplateColumns: "2.4fr 0.8fr repeat(4, 1fr)",
+                  padding: "11px 18px", gap: 8, alignItems: "center",
+                  background: isExp ? "#EEF3F8" : di % 2 === 0 ? "#FAFAFA" : "#fff",
+                  cursor: "pointer", borderBottom: "1px solid #F0F0F0", transition: "background 0.1s",
+                }}>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: "#1B2A4A" }}>
+                    {deal.name}
+                    <span style={{ fontSize: 11, color: "#999", fontWeight: 400, marginLeft: 8 }}>{deal.quarter}</span>
+                  </div>
+                  <div style={{ fontSize: 12, color: "#888", marginTop: 1 }}>{normaliseRep(deal.rep) + " \u00B7 " + formatAmount(deal) + " \u00B7 " + deal.stage}</div>
+                </div>
+                <div style={{ textAlign: "center" }}>
+                  <span style={{ display: "inline-block", padding: "4px 12px", borderRadius: 12, fontSize: 12, fontWeight: 600, background: catS.bg, color: catS.text }}>{normaliseCategory(deal.category)}</span>
+                </div>
+                {PILLARS.map(function(p) {
+                  var s = STATUS[deal.pillars[p.key].status];
+                  return (
+                    <div key={p.key} style={{ textAlign: "center" }}>
+                      <select
+                        value={deal.pillars[p.key].status}
+                        onClick={function(e) { e.stopPropagation(); }}
+                        onChange={function(e) { e.stopPropagation(); handleStatusChange(deal.name, p.key, e.target.value); }}
+                        style={{
+                          background: s.bg, color: s.text, border: "none", borderRadius: 14,
+                          padding: "5px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer",
+                          minWidth: 110, appearance: "none", WebkitAppearance: "none",
+                          textAlign: "center", textAlignLast: "center", outline: "none",
+                          boxShadow: "0 1px 3px rgba(0,0,0,0.15)", transition: "all 0.15s"
+                        }}>
+                        {STATUS_ORDER.map(function(k) {
+                          return <option key={k} value={k} style={{ background: STATUS[k].bg, color: STATUS[k].text }}>{STATUS[k].label}</option>;
+                        })}
+                      </select>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {isExp && (
+                <div style={{ background: "#F7F9FC", padding: "16px 24px 20px", borderBottom: "2px solid #D0D8E0" }}>
+                  <div style={{ fontSize: 12, color: "#888", marginBottom: 10 }}>
+                    {"Close: " + deal.closeDate + " \u00B7 Stage: " + deal.stage}
+                  </div>
+                  <div className="expanded-pillars" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                    {PILLARS.map(function(p) {
+                      var pd = deal.pillars[p.key];
+                      var s = STATUS[pd.status];
+                      var isEd = editingCell && editingCell.deal === deal.name && editingCell.pillar === p.key;
+                      return (
+                        <div key={p.key} style={{ background: "#fff", borderRadius: 10, padding: 12, border: "2px solid " + s.bg + "25" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                            <span style={{ fontSize: 16 }}>{p.icon}</span>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: "#1B2A4A" }}>{p.label}</span>
+                            <select
+                              value={pd.status}
+                              onClick={function(e) { e.stopPropagation(); }}
+                              onChange={function(e) { e.stopPropagation(); handleStatusChange(deal.name, p.key, e.target.value); }}
+                              style={{
+                                fontSize: 10, fontWeight: 600, background: s.bg, color: s.text,
+                                padding: "2px 8px", borderRadius: 10, marginLeft: "auto", border: "none",
+                                appearance: "none", WebkitAppearance: "none", cursor: "pointer", outline: "none"
+                              }}>
+                              {STATUS_ORDER.map(function(k) {
+                                return <option key={k} value={k}>{STATUS[k].label}</option>;
+                              })}
+                            </select>
+                          </div>
+                          {isEd ? (
+                            <textarea autoFocus value={pd.note}
+                              onChange={function(e) { handleNoteEdit(deal.name, p.key, e.target.value); }}
+                              onBlur={function() { setEditingCell(null); }}
+                              onKeyDown={function(e) { if (e.key === "Escape") setEditingCell(null); }}
+                              style={{ width: "100%", minHeight: 50, fontSize: 12, fontFamily: "Arial", border: "1px solid #CCC", borderRadius: 6, padding: 8, resize: "vertical", boxSizing: "border-box" }}
+                            />
+                          ) : (
+                            <p onClick={function(e) { e.stopPropagation(); setEditingCell({ deal: deal.name, pillar: p.key }); }}
+                              style={{ fontSize: 12, color: "#555", margin: 0, lineHeight: 1.6, cursor: "text" }} title="Click to edit">
+                              {pd.note || "\u2014"}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Legend */}
+      <div style={{ display: "flex", gap: 16, marginTop: 16, justifyContent: "center", flexWrap: "wrap" }}>
+        {Object.entries(STATUS).map(function(entry) {
+          var k = entry[0]; var s = entry[1];
+          return (
+            <div key={k} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ display: "inline-block", width: 12, height: 12, borderRadius: 6, background: s.bg }} />
+              <span style={{ fontSize: 11, color: "#666" }}>{s.label}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Slide Nav Footer */}
+      {_isOfficeEnv && (
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderTop: "1px solid #E8E8E8", marginTop: 24 }}>
+          <button onClick={function() { goToSlide("prev"); }}
+            style={{ padding: "4px 14px", border: "1px solid #DDD", borderRadius: 4, cursor: "pointer", background: "#fff", fontSize: 12, fontWeight: 600, color: "#555" }}>
+            {"\u25C0"} Prev
+          </button>
+          <button onClick={function() { goToSlide("next"); }}
+            style={{ padding: "4px 14px", border: "1px solid #DDD", borderRadius: 4, cursor: "pointer", background: "#fff", fontSize: 12, fontWeight: 600, color: "#555" }}>
+            Next {"\u25B6"}
+          </button>
+        </div>
+      )}
+
+    </div>
+  );
+}
+
+function renderApp() {
+  initOfficeNav();
+  ReactDOM.render(React.createElement(PillarMatrix), document.getElementById("root"));
+}
+var _initDone = false;
+function safeRenderApp() {
+  if (_initDone) return;
+  _initDone = true;
+  renderApp();
+}
+window.addEventListener('load', safeRenderApp);
+</script>
+</body>
+</html>

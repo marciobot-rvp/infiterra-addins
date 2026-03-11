@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<base href="https://revops-vps.tail8c3986.ts.net/forecast-snapshot/">
+<title>Infiterra — Rep Level Snapshot</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js" async></script>
+<style>
+  :root {
+    --navy:    #1B2A4A;
+    --coral:   #ED3153;
+    --blue:    #3F6A9C;
+    --green:   #27AE60;
+    --amber:   #F5A623;
+    --gold:    #F5A623;
+    --fog:     #F4F6F9;
+    --line:    #DDE3EC;
+    --muted:   #7A8CA0;
+    --tbl-hdr: #2E4270;
+    --tbl-sub: #4A6491;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 100%; height: 100%;
+    font-family: 'DM Sans', sans-serif;
+    background: #fff; color: var(--navy);
+    overflow: auto;
+  }
+  .slide {
+    width: 100%; height: 100%;
+    display: grid;
+    grid-template-rows: auto auto 1fr auto;
+    min-height: 0;
+  }
+
+  /* ── HEADER ── */
+  .slide-header {
+    background: var(--navy);
+    padding: 14px 40px;
+    display: flex; align-items: center; justify-content: space-between;
+    position: relative; overflow: hidden;
+  }
+  .slide-header::after {
+    content: '';
+    position: absolute; right: -40px; top: -60px;
+    width: 220px; height: 220px;
+    background: radial-gradient(circle, rgba(237,49,83,0.1) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .header-left { display: flex; align-items: center; gap: 20px; }
+  .logo-svg { height: 18px; opacity: 0.9; flex-shrink: 0; }
+  .header-divider { width: 1px; height: 28px; background: rgba(255,255,255,0.15); }
+  .header-text {}
+  .header-label {
+    font-size: 10px; font-weight: 600; letter-spacing: 0.14em;
+    text-transform: uppercase; color: rgba(255,255,255,0.38);
+    font-family: 'DM Mono', monospace; margin-bottom: 2px;
+  }
+  .header-title {
+    font-size: 22px; font-weight: 800; color: #fff; letter-spacing: -0.4px; line-height: 1;
+  }
+  .header-right { display: flex; align-items: center; gap: 10px; z-index: 1; }
+  .meta-pill {
+    display: flex; align-items: center; gap: 7px;
+    background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.13);
+    border-radius: 20px; padding: 4px 12px;
+    font-size: 11px; color: rgba(255,255,255,0.6); font-weight: 500;
+  }
+  .meta-pill .dot {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--coral);
+    animation: blink 2.2s ease-in-out infinite;
+  }
+  @keyframes blink { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.45;transform:scale(.8)} }
+
+  /* ── TOOLBAR ── */
+  .toolbar {
+    background: var(--fog); border-bottom: 2px solid var(--line);
+    padding: 8px 40px;
+    display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+  }
+  .toolbar-label {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--muted);
+    font-family: 'DM Mono', monospace; white-space: nowrap;
+  }
+
+  /* ── CUSTOM DROPDOWN ── */
+  .dd-wrap { position: relative; }
+  .dd-btn {
+    display: flex; align-items: center; gap: 8px;
+    background: #fff; border: 1.5px solid var(--line);
+    border-radius: 6px; padding: 6px 12px;
+    font-size: 12px; font-weight: 600; color: var(--navy);
+    cursor: pointer; transition: border-color .15s, box-shadow .15s;
+    font-family: 'DM Sans', sans-serif; white-space: nowrap;
+    user-select: none;
+  }
+  .dd-btn:hover { border-color: var(--blue); }
+  .dd-btn.open  { border-color: var(--navy); box-shadow: 0 0 0 3px rgba(27,42,74,0.08); }
+  .dd-btn .dd-arrow {
+    width: 0; height: 0;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 5px solid var(--muted);
+    transition: transform .15s;
+    flex-shrink: 0; margin-left: 2px;
+  }
+  .dd-btn.open .dd-arrow { transform: rotate(180deg); }
+  .dd-color-dot {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  }
+
+  .dd-menu {
+    display: none; position: absolute; top: calc(100% + 4px); left: 0;
+    background: #fff; border: 1.5px solid var(--line);
+    border-radius: 8px; box-shadow: 0 8px 24px rgba(27,42,74,0.14);
+    z-index: 100; min-width: 160px; overflow: hidden;
+    animation: ddIn .12s ease;
+  }
+  @keyframes ddIn { from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:translateY(0)} }
+  .dd-menu.open { display: block; }
+  .dd-item {
+    display: flex; align-items: center; gap: 9px;
+    padding: 9px 14px; font-size: 12px; font-weight: 600;
+    color: var(--navy); cursor: pointer; transition: background .1s;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .dd-item:hover { background: var(--fog); }
+  .dd-item.selected { background: rgba(27,42,74,0.06); }
+  .dd-item .dd-check { margin-left: auto; font-size: 11px; color: var(--navy); opacity: 0; }
+  .dd-item.selected .dd-check { opacity: 1; }
+
+  .pct-tag {
+    font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 700;
+    margin-left: 5px; opacity: 0.9;
+  }
+
+  /* commit cell tooltip */
+  .commit-cell { position: relative; display: inline-flex; align-items: center; gap: 0; cursor: default; }
+  .commit-cell .pct-tooltip {
+    display: none;
+    position: absolute; bottom: calc(100% + 8px); left: 50%;
+    transform: translateX(-50%);
+    background: var(--navy); color: #fff;
+    font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 700;
+    padding: 4px 9px; border-radius: 5px; white-space: nowrap;
+    pointer-events: none; z-index: 200;
+    box-shadow: 0 3px 10px rgba(27,42,74,0.2);
+  }
+  .commit-cell .pct-tooltip::after {
+    content: '';
+    position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-top-color: var(--navy);
+  }
+  .commit-cell:hover .pct-tooltip { display: block; }
+
+  /* total row tooltip — white bubble on gold */
+  .total-row .commit-cell .pct-tooltip {
+    background: #fff; color: var(--navy);
+    box-shadow: 0 3px 10px rgba(27,42,74,0.15);
+  }
+  .total-row .commit-cell .pct-tooltip::after {
+    border-top-color: #fff;
+  }
+
+  .toolbar-divider { width: 1px; height: 22px; background: var(--line); margin: 0 4px; }
+  .toolbar-spacer { flex: 1; }
+  .cov-chip {
+    font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 700;
+    padding: 4px 10px; border-radius: 4px; white-space: nowrap;
+  }
+
+  /* ── BODY ── */
+  .slide-body {
+    overflow-y: auto; overflow-x: hidden;
+    padding: 14px 40px 10px;
+    display: flex; flex-direction: column; gap: 11px;
+    min-height: 0;
+  }
+  .slide-body::-webkit-scrollbar { width: 4px; }
+  .slide-body::-webkit-scrollbar-thumb { background: var(--line); border-radius: 2px; }
+
+  /* ── COVERAGE TABLE ── */
+  .section-title {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.12em; color: #fff;
+    background: var(--tbl-hdr); text-align: center;
+    padding: 7px 12px; border-radius: 6px 6px 0 0;
+  }
+  .cov-table {
+    width: 100%; border-collapse: collapse;
+    border: 1px solid #c8d3e6; border-top: none;
+    overflow: visible;
+  }
+  .cov-table tbody { overflow: visible; }
+  .cov-table thead tr { background: var(--tbl-sub); }
+  .cov-table thead th {
+    font-size: 11px; font-weight: 700; color: rgba(255,255,255,0.88);
+    padding: 7px 10px; text-align: center;
+    border-right: 1px solid rgba(255,255,255,0.13);
+    white-space: nowrap; font-family: 'DM Sans', sans-serif;
+  }
+  .cov-table thead th:first-child { text-align: left; }
+  .cov-table thead th:last-child  { border-right: none; }
+  .cov-table tbody tr { border-bottom: 1px solid var(--line); transition: background .12s; }
+  .cov-table tbody tr:hover { background: #EEF2F8; }
+  .cov-table tbody tr.total-row {
+    background: var(--gold) !important;
+    border-top: 2px solid #c8860e; border-bottom: none;
+  }
+  .cov-table tbody tr.total-row td { font-weight: 800; color: #fff; }
+  .cov-table td {
+    padding: 8px 10px; font-size: 12.5px;
+    text-align: center; vertical-align: middle;
+    border-right: 1px solid var(--line);
+  }
+  .cov-table td:first-child { text-align: left; }
+  .cov-table td:last-child  { border-right: none; }
+
+  .rep-name { font-weight: 700; font-size: 13px; }
+  .num { font-family: 'DM Mono', monospace; font-size: 12px; }
+  .won-val  { color: var(--green); font-weight: 700; font-family: 'DM Mono', monospace; font-size: 12px; }
+  .zero-val { color: var(--muted); font-family: 'DM Mono', monospace; font-size: 12px; }
+  .deals-text { font-size: 11.5px; color: #374d6a; }
+
+  /* Coverage bar cell */
+  .cov-cell {
+    display: flex; align-items: center; gap: 8px;
+    justify-content: flex-start;
+    min-width: 110px;
+  }
+  .cov-num {
+    font-family: 'DM Mono', monospace; font-size: 12px; font-weight: 700;
+    min-width: 34px; text-align: right; flex-shrink: 0;
+  }
+  .cov-bar-bg {
+    flex: 1; height: 7px; border-radius: 4px;
+    background: var(--line); overflow: hidden; min-width: 50px;
+  }
+  .cov-bar-fill { height: 100%; border-radius: 4px; transition: width .5s ease; }
+
+  /* ── BOTTOM TWO-COLUMN ── */
+  .bottom-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; flex-shrink: 0; }
+  .bottom-panel { display: flex; flex-direction: column; }
+  .panel-title {
+    font-size: 11px; font-weight: 800; text-transform: uppercase;
+    letter-spacing: 0.13em; color: #fff;
+    padding: 7px 14px; text-align: center; border-radius: 6px 6px 0 0;
+  }
+  .panel-title.green-hdr { background: var(--green); }
+  .panel-title.blue-hdr  { background: var(--tbl-hdr); }
+  .panel-body {
+    border: 1px solid var(--line); border-top: none;
+    border-radius: 0 0 6px 6px; padding: 10px 14px;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .deal-item {
+    font-size: 12px; line-height: 1.55; color: #2c3e50;
+    padding-bottom: 8px; border-bottom: 1px solid var(--line);
+  }
+  .deal-item:last-child { border-bottom: none; padding-bottom: 0; }
+  .deal-item strong { font-weight: 700; }
+  .empty-state { color: var(--muted); font-style: italic; font-size: 12px; }
+
+  /* ── SENTIMENT KEY ── */
+  .sentiment-key {
+    display: flex; align-items: center; flex-wrap: wrap;
+    font-size: 10.5px; color: var(--muted);
+    padding-top: 4px; flex-shrink: 0;
+  }
+  .sk-label { font-weight: 700; margin-right: 8px; font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; }
+  .sk-item  { margin-right: 10px; white-space: nowrap; }
+  .sk-sep   { margin-right: 10px; color: var(--line); }
+
+  .no-data { text-align: center; color: var(--muted); font-size: 13px; padding: 24px 0; }
+
+  /* ── FOOTER ── */
+  .slide-footer {
+    background: var(--fog); border-top: 1px solid var(--line);
+    padding: 6px 40px;
+    display: flex; align-items: center; justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .footer-left { font-size: 10px; color: var(--muted); font-family: 'DM Mono', monospace; }
+  .footer-right { display: flex; gap: 8px; }
+  .footer-btn {
+    font-size: 11px; font-weight: 600; padding: 4px 12px; border-radius: 4px;
+    border: 1px solid var(--line); background: #fff; color: var(--muted);
+    cursor: pointer; transition: all .14s; font-family: 'DM Sans', sans-serif;
+  }
+  .footer-btn:hover { border-color: var(--navy); color: var(--navy); }
+  .footer-btn.nav { display: none; }
+  .footer-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+</style>
+</head>
+<body>
+<div class="slide">
+
+  <!-- HEADER -->
+  <header class="slide-header">
+    <div class="header-left">
+      <svg class="logo-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 404.47 46.054">
+        <defs><style>.w{fill:#fff}.r{fill:#ED3153}</style></defs>
+        <path class="w" d="M368.601-227.829c-8.741-16.133-21.798-25.385-35.822-25.385h-2.624c-1.297,0-1.559.262-1.559,1.559v17.309c0,1.297.262,1.559,1.559,1.559h2.624c6.774,0,12.334,6.459,15.045,10.31,6.333,8.991,9.965,21.872,9.965,35.34,0,20.757-8.38,36.246-16.685,42.387-1.384,1.023-3.317.835-4.477-.436l-97.085-106.356c-1.323-1.45-2.217-1.466-2.51-1.471-25.052,0-45.484,29.643-45.484,66.078,0,14.881,3.362,28.951,9.723,40.691,8.741,16.133,21.798,25.386,35.822,25.386h2.624c1.297,0,1.559-.262,1.559-1.559v-17.31c0-1.297-.262-1.559-1.559-1.559h-2.624c-6.774,0-12.334-6.459-15.045-10.31-6.333-8.991-9.965-21.872-9.965-35.339,0-21.677,8.734-36.188,16.214-42.028,1.384-1.079,3.364-.912,4.547.383l96.989,106.252c1.13,1.238,1.339,1.282,2.924,1.268,25.135,0,45.567-29.642,45.567-66.076,0-14.881-3.362-28.952-9.723-40.691Z"/>
+        <g>
+          <path class="w" d="M0,0h6.532s0,46.054,0,46.054H0S0,0,0,0Z"/>
+          <path class="w" d="M99.326,0h30.316s0,5.74,0,5.74h-23.784s0,14.684,0,14.684h20.873s0,5.74,0,5.74h-20.873s0,19.89,0,19.89h-6.532s0-46.054,0-46.054Z"/>
+          <path class="w" d="M143.586,0h6.532s0,46.054,0,46.054h-6.532s0-46.054,0-46.054Z"/>
+          <path class="w" d="M178.83,5.74h-14.767s0-5.74,0-5.74h36.066s0,5.74,0,5.74h-14.767s0,40.314,0,40.314h-6.532s0-40.314,0-40.314Z"/>
+          <path class="w" d="M214.075,0h31.38s0,5.74,0,5.74h-24.849s0,14.283,0,14.283h22.506s0,5.74,0,5.74h-22.506s0,14.55,0,14.55h25.204s0,5.74,0,5.74h-31.736s0-46.054,0-46.054Z"/>
+          <path class="w" d="M259.755,0h20.944c8.733,0,15.335,6.007,15.335,14.016,0,7.209-5.467,12.682-12.921,13.616l14.341,18.422h-8.094s-13.986-18.288-13.986-18.288h-9.088s0,18.288,0,18.288h-6.532s0-46.054,0-46.054ZM266.287,5.74v16.686s14.342,0,14.342,0c4.97,0,8.732-3.538,8.732-8.343,0-4.805-3.763-8.343-8.732-8.343h-14.342Z"/>
+          <path class="w" d="M311.4,0h20.944c8.733,0,15.335,6.007,15.335,14.016,0,7.209-5.467,12.682-12.921,13.616l14.341,18.422h-8.094s-13.986-18.288-13.986-18.288h-9.088s0,18.288,0,18.288h-6.532s0-46.054,0-46.054ZM317.932,5.74v16.686s14.342,0,14.342,0c4.97,0,8.732-3.538,8.732-8.343,0-4.805-3.763-8.343-8.732-8.343h-14.342Z"/>
+          <path class="w" d="M376.781,0h7.739s19.95,46.054,19.95,46.054h-7.171s-4.757-11.146-4.757-11.146h-23.997s-4.757,11.146-4.757,11.146h-6.958S376.781,0,376.781,0ZM390.128,29.234l-9.584-22.56-9.585,22.56h19.169Z"/>
+          <path class="r" d="M82.002,8.821C78.964,3.215,74.427,0,69.554,0h-.912c-.451,0-.542.091-.542.542v6.015c0,.451.091.542.542.542h.912c2.354,0,4.286,2.245,5.228,3.583,2.201,3.124,3.463,7.6,3.463,12.28,0,7.213-2.912,12.595-5.798,14.729-.481.356-1.153.29-1.556-.151L37.154.581c-.46-.504-.77-.509-.872-.511-8.706,0-15.805,10.301-15.805,22.962,0,5.171,1.168,10.06,3.379,14.14,3.038,5.606,7.575,8.821,12.448,8.821h.912c.451,0,.542-.091.542-.542v-6.015c0-.451-.091-.542-.542-.542h-.912c-2.354,0-4.286-2.245-5.228-3.583-2.201-3.124-3.463-7.6-3.463-12.28,0-7.533,3.035-12.575,5.634-14.604.481-.375,1.169-.317,1.58.133l33.703,36.922c.393.43.465.445,1.016.441,8.734,0,15.834-10.3,15.834-22.961,0-5.171-1.168-10.061-3.379-14.14Z"/>
+        </g>
+      </svg>
+      <div class="header-divider"></div>
+      <div class="header-text">
+        <div class="header-label">Sales Forecast Call</div>
+        <div class="header-title" id="header-title">Rep Level Snapshot — Q1 2026</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="meta-pill"><div class="dot"></div><span id="source-label">10.03.26</span></div>
+      <div class="meta-pill" id="coverage-pill">Team Coverage: —</div>
+    </div>
+  </header>
+
+  <!-- TOOLBAR -->
+  <div class="toolbar">
+
+    <!-- Quarter dropdown -->
+    <span class="toolbar-label">Quarter</span>
+    <div class="dd-wrap" id="dd-quarter-wrap">
+      <div class="dd-btn" id="dd-quarter-btn" onclick="toggleDd('quarter')">
+        <span id="dd-quarter-label">Q1 2026</span>
+        <span class="dd-arrow"></span>
+      </div>
+      <div class="dd-menu" id="dd-quarter-menu">
+        <div class="dd-item selected" data-val="Q1" onclick="selectQuarter('Q1')">Q1 2026 <span class="dd-check">✓</span></div>
+        <div class="dd-item"          data-val="Q2" onclick="selectQuarter('Q2')">Q2 2026 <span class="dd-check">✓</span></div>
+        <div class="dd-item"          data-val="Q3" onclick="selectQuarter('Q3')">Q3 2026 <span class="dd-check">✓</span></div>
+        <div class="dd-item"          data-val="Q4" onclick="selectQuarter('Q4')">Q4 2026 <span class="dd-check">✓</span></div>
+      </div>
+    </div>
+
+    <div class="toolbar-spacer"></div>
+
+    <span class="cov-chip" id="cov-chip" style="background:rgba(237,49,83,0.08);color:#ED3153">— Coverage</span>
+    <span class="cov-chip" id="won-chip" style="background:rgba(39,174,96,0.1);color:#27AE60">Won —</span>
+
+  </div>
+
+  <!-- BODY -->
+  <div class="slide-body" id="slide-body"></div>
+
+  <!-- FOOTER -->
+  <footer class="slide-footer">
+    <div class="footer-left">source: hubspot · gong · <span id="q-label">Q1 2026</span></div>
+    <div class="footer-right">
+      <button class="footer-btn nav" id="btn-prev" onclick="goToSlide('prev')">← Prev</button>
+      <button class="footer-btn nav" id="btn-next" onclick="goToSlide('next')">Next →</button>
+      <button class="footer-btn" id="btn-refresh" onclick="refreshData()">↻ Refresh</button>
+    </div>
+  </footer>
+
+</div>
+<script>
+// ══════════════════════════════════════════════════════
+//  DATA — overwritten by data.json when live
+// ══════════════════════════════════════════════════════
+var DATA = {
+  Q1: {
+    reps: [
+      { name:'Scott Murphy', target:15000, commit:0,     commitDeals:'No Deals',        coverage:0.00, bestCase:7500,  bestCaseDeals:'DATAGROUP (33%), Kerv (67%)', won:0 },
+      { name:'Paul Maguire', target:15000, commit:30957, commitDeals:'Mindware (100%)',  coverage:2.48, bestCase:0,     bestCaseDeals:'No Deals',                    won:6301 },
+      { name:'Alex Martel',  target:15000, commit:8469,  commitDeals:'NTT DATA (100%)',  coverage:0.56, bestCase:5082,  bestCaseDeals:'NWN (100%)',                  won:0 },
+      { name:'Rathan Yogi',  target:15000, commit:0,     commitDeals:'No Deals',         coverage:0.00, bestCase:4658,  bestCaseDeals:'Altanora (100%)',              won:0 }
+    ],
+    totals: { target:60000, commit:39426, coverage:0.76, bestCase:17240, won:6301 },
+    milestones: [
+      { deal:'Tech One Global', amount:'€6,301', rep:'Paul Maguire', sentiment:'🟢✅', text:'Closed Won. DocuSign signed by Sachin and CEO Lars. Congrats Paul!' },
+      { deal:'Kerv',            amount:'€5,000', rep:'Scott Murphy', sentiment:'🟡⬆',  text:'Platform demo on 5 Mar. Business case shared, storefront walkthrough, billing importer proposal, ERP/CRM integration discussed. Scott followed up 9 Mar.' },
+      { deal:'NWN',             amount:'€5,082', rep:'Alex Martel',  sentiment:'🟡⬆',  text:'Gong call 6 Mar: Enrique awaiting VP approval for build vs buy comparison. Kevin requested implementation outline. Contract sent to legal. Build vs Buy deck shared to support internal stakeholder alignment.' }
+    ],
+    talkingPoints: [
+      { deal:'Mindware',  amount:'€30,957', rep:'Paul Maguire', sentiment:'🟡⬆',  text:'MSA feedback received. Prospect flagged Clause 5.5 on fee escalation. Last week we discussed legal and pricing negotiation. Any support required to address this?' },
+      { deal:'NTT DATA',  amount:'€8,469',  rep:'Alex Martel',  sentiment:'🔴⏸',  text:'Last week we agreed to prepare for the March 13 NTT call to clarify contract progress. Any additional support required?' },
+      { deal:'DATAGROUP', amount:'€2,500',  rep:'Scott Murphy', sentiment:'🟡➡',  text:'Prospect confirmed end-of-March decision timeline. Anything needed to support?' },
+      { deal:'Altanora',  amount:'€4,658',  rep:'Rathan Yogi',  sentiment:'🔴⏸',  text:'March 18 C-suite pricing presentation approaching. Last week agreed to prepare strategy. Anything else required before the 18th?' }
+    ]
+  },
+  Q2: { reps: _emptyReps(20000), totals: _emptyTotals(80000), milestones: [], talkingPoints: [] },
+  Q3: { reps: _emptyReps(20000), totals: _emptyTotals(80000), milestones: [], talkingPoints: [] },
+  Q4: { reps: _emptyReps(20000), totals: _emptyTotals(80000), milestones: [], talkingPoints: [] }
+};
+
+function _emptyReps(t) {
+  var names = ['Scott Murphy','Paul Maguire','Alex Martel','Rathan Yogi'];
+  return names.map(function(n) {
+    return { name:n, target:t, commit:0, commitDeals:'No Deals', coverage:0.00, bestCase:0, bestCaseDeals:'No Deals', won:0 };
+  });
+}
+function _emptyTotals(t) { return { target:t, commit:0, coverage:0.00, bestCase:0, won:0 }; }
+
+// ── STATE ──────────────────────────────────────────────
+var _quarter  = 'Q1';
+var _isOfficeEnv = false;
+var _openDd = null;
+
+// ── HELPERS ────────────────────────────────────────────
+function esc(s) { var d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+function fmtEur(n) { if(n===0) return '€0'; if(!n||n<0) return '—'; return '€'+Number(n).toLocaleString('en-GB'); }
+
+function covColor(c) {
+  if (c >= 1.5) return '#27AE60';
+  if (c >= 1.0) return '#F5A623';
+  return '#ED3153'; // red for anything below 1.0x, including 0
+}
+function covBarWidth(c) {
+  return Math.min(c / 2.5, 1) * 100 + '%';
+}
+
+// ── DROPDOWN LOGIC ─────────────────────────────────────
+function toggleDd(which) {
+  var isOpen = _openDd === which;
+  closeAllDd();
+  if (!isOpen) {
+    _openDd = which;
+    document.getElementById('dd-' + which + '-btn').classList.add('open');
+    document.getElementById('dd-' + which + '-menu').classList.add('open');
+  }
+}
+function closeAllDd() {
+  ['quarter'].forEach(function(w) {
+    var btn  = document.getElementById('dd-' + w + '-btn');
+    var menu = document.getElementById('dd-' + w + '-menu');
+    if (btn)  btn.classList.remove('open');
+    if (menu) menu.classList.remove('open');
+  });
+  _openDd = null;
+}
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.dd-wrap')) closeAllDd();
+});
+
+function selectQuarter(q) {
+  _quarter = q;
+  document.getElementById('dd-quarter-label').textContent = q + ' 2026';
+  document.querySelectorAll('#dd-quarter-menu .dd-item').forEach(function(item) {
+    item.classList.toggle('selected', item.getAttribute('data-val') === q);
+  });
+  closeAllDd();
+  render();
+}
+
+// ── RENDER ─────────────────────────────────────────────
+function render() {
+  var qd = DATA[_quarter];
+  if (!qd) return;
+
+  var totals = qd.totals;
+  var cov    = totals.coverage;
+
+  // Header + chips
+  document.getElementById('header-title').textContent = 'Rep Level Snapshot — ' + _quarter + ' 2026';
+  document.getElementById('q-label').textContent = _quarter + ' 2026';
+  document.getElementById('coverage-pill').textContent = 'Team Coverage: ' + cov.toFixed(2) + '×';
+
+  var chip = document.getElementById('cov-chip');
+  chip.textContent = cov.toFixed(2) + '× Coverage';
+  var cc = covColor(cov);
+  chip.style.color = cc;
+  chip.style.background = cc === '#27AE60' ? 'rgba(39,174,96,0.1)'
+                        : cc === '#F5A623' ? 'rgba(245,166,35,0.1)'
+                        : cc === '#ED3153' ? 'rgba(237,49,83,0.08)'
+                        : 'rgba(192,202,212,0.15)';
+  document.getElementById('won-chip').textContent = 'Won ' + fmtEur(totals.won) + (totals.target > 0 ? ' · ' + Math.round((totals.won/totals.target)*100) + '% of target' : '');
+
+  var sc = true;
+  var sb = true;
+
+  // ── TABLE ──────────────────────────────────────────
+  var thead = '<tr>' +
+    '<th style="text-align:left;width:15%">New Logo Bookings (€)</th>' +
+    '<th style="width:9%">Q' + _quarter.slice(1) + ' Target</th>' +
+    (sc ? '<th style="width:9%">Commit</th><th style="width:17%">Committed Deals</th>' : '') +
+    '<th style="width:13%">Coverage</th>' +
+    (sb ? '<th style="width:9%">Best Case</th><th style="width:17%">Best Case Deals</th>' : '') +
+    '<th style="width:9%">Won</th>' +
+    '</tr>';
+
+  var tbodyRows = '';
+  qd.reps.forEach(function(r) {
+    var cc = covColor(r.coverage);
+    var bw = covBarWidth(r.coverage);
+    tbodyRows +=
+      '<tr>' +
+      '<td><span class="rep-name">' + esc(r.name) + '</span></td>' +
+      '<td><span class="num">' + fmtEur(r.target) + '</span></td>' +
+      (sc ? '<td><div class="commit-cell">' +
+            '<span class="num">' + fmtEur(r.commit) + '</span>' +
+            (r.target > 0 ? '<span class="pct-tooltip">' + Math.round((r.commit/r.target)*100) + '% of target</span>' : '') +
+            '</div></td>' +
+            '<td><span class="deals-text">' + esc(r.commitDeals) + '</span></td>' : '') +
+      '<td>' +
+        '<div class="cov-cell">' +
+          '<span class="cov-num" style="color:' + cc + '">' + r.coverage.toFixed(2) + 'x</span>' +
+          '<div class="cov-bar-bg"><div class="cov-bar-fill" style="width:' + bw + ';background:' + cc + '"></div></div>' +
+        '</div>' +
+      '</td>' +
+      (sb ? '<td><span class="num">' + fmtEur(r.bestCase) + '</span></td>' +
+            '<td><span class="deals-text">' + esc(r.bestCaseDeals) + '</span></td>' : '') +
+      '<td><span class="' + (r.won > 0 ? 'won-val' : 'zero-val') + '">' + fmtEur(r.won) + '</span></td>' +
+      '</tr>';
+  });
+
+  // Totals row — coverage bar for total too
+  var tc = covColor(cov);
+  var tw = covBarWidth(cov);
+  tbodyRows +=
+    '<tr class="total-row">' +
+    '<td>Total</td>' +
+    '<td><span class="num">' + fmtEur(totals.target) + '</span></td>' +
+    (sc ? '<td><div class="commit-cell">' +
+          '<span class="num">' + fmtEur(totals.commit) + '</span>' +
+          (totals.target > 0 ? '<span class="pct-tooltip">' + Math.round((totals.commit/totals.target)*100) + '% of target</span>' : '') +
+          '</div></td><td></td>' : '') +
+    '<td>' +
+      '<div class="cov-cell">' +
+        '<span class="cov-num" style="color:#fff">' + cov.toFixed(2) + 'x</span>' +
+        '<div class="cov-bar-bg" style="background:rgba(255,255,255,0.3)">' +
+          '<div class="cov-bar-fill" style="width:' + tw + ';background:#fff"></div>' +
+        '</div>' +
+      '</div>' +
+    '</td>' +
+    (sb ? '<td><span class="num">' + fmtEur(totals.bestCase) + '</span></td><td></td>' : '') +
+    '<td><span class="num">' + fmtEur(totals.won) + '</span></td>' +
+    '</tr>';
+
+  var tableHtml =
+    '<div class="section-title">Coverage Tracker</div>' +
+    '<table class="cov-table"><thead>' + thead + '</thead><tbody>' + tbodyRows + '</tbody></table>';
+
+  // ── BOTTOM ─────────────────────────────────────────
+  var miles = qd.milestones;
+  var talks = qd.talkingPoints;
+  var noActivity = miles.length === 0 && talks.length === 0;
+
+  var bottomHtml;
+  if (noActivity) {
+    bottomHtml = '<div class="no-data">No deal activity recorded for ' + _quarter + ' 2026 yet — this will populate once Claude Code wires in the HubSpot / Gong feed.</div>';
+  } else {
+    var milesHtml = miles.length
+      ? miles.map(function(m) {
+          return '<div class="deal-item"><strong>' + esc(m.deal) + ' (' + esc(m.amount) + ' · ' + esc(m.rep) + '):</strong> ' + m.sentiment + ' ' + esc(m.text) + '</div>';
+        }).join('')
+      : '<div class="empty-state">No milestones for this view.</div>';
+
+    var talksHtml = talks.length
+      ? talks.map(function(t) {
+          return '<div class="deal-item"><strong>' + esc(t.deal) + ' (' + esc(t.amount) + '):</strong> ' + t.sentiment + ' ' + esc(t.text) + '</div>';
+        }).join('')
+      : '<div class="empty-state">No talking points for this view.</div>';
+
+    bottomHtml =
+      '<div class="bottom-grid">' +
+        '<div class="bottom-panel">' +
+          '<div class="panel-title green-hdr">Key Milestones Over the Last Week</div>' +
+          '<div class="panel-body">' + milesHtml + '</div>' +
+        '</div>' +
+        '<div class="bottom-panel">' +
+          '<div class="panel-title blue-hdr">Talking Points</div>' +
+          '<div class="panel-body">' + talksHtml + '</div>' +
+        '</div>' +
+      '</div>';
+  }
+
+  // Sentiment key
+  var sentKey =
+    '<div class="sentiment-key">' +
+    '<span class="sk-label">Sentiment Key:</span>' +
+    '<span class="sk-item">🟢 Positive</span><span class="sk-sep"> | </span>' +
+    '<span class="sk-item">🟡 Cautious-Positive</span><span class="sk-sep"> | </span>' +
+    '<span class="sk-item">🟠 Neutral</span><span class="sk-sep"> | </span>' +
+    '<span class="sk-item">🔴 Cautious</span><span class="sk-sep"> | </span>' +
+    '<span class="sk-item">⬆ Accelerating</span><span class="sk-sep"> | </span>' +
+    '<span class="sk-item">➡ Stable</span><span class="sk-sep"> | </span>' +
+    '<span class="sk-item">↘ Slowing</span><span class="sk-sep"> | </span>' +
+    '<span class="sk-item">⏸ Stalled</span>' +
+    '</div>';
+
+  document.getElementById('slide-body').innerHTML = tableHtml + bottomHtml + sentKey;
+}
+
+// ── REFRESH ───────────────────────────────────────────
+function refreshData() {
+  var btn = document.getElementById('btn-refresh');
+  btn.textContent = 'Refreshing...';
+  btn.disabled = true;
+  fetch('refresh', { method: 'POST' })
+    .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function(d) {
+      if (d && d.Q1) { DATA = d; render(); btn.textContent = '✓ Updated'; }
+      else if (d && d.error) { btn.textContent = '✗ Error'; console.error(d.error); }
+      else { btn.textContent = '↻ Refresh'; }
+      btn.disabled = false;
+      setTimeout(function() { btn.textContent = '↻ Refresh'; }, 2000);
+    })
+    .catch(function(e) {
+      console.error('Refresh failed:', e);
+      btn.textContent = '✗ Error';
+      btn.disabled = false;
+      setTimeout(function() { btn.textContent = '↻ Refresh'; }, 2000);
+    });
+}
+
+// ── SLIDE NAV ─────────────────────────────────────────
+function goToSlide(dir) {
+  if (!_isOfficeEnv) return;
+  try {
+    Office.context.document.goToByIdAsync(
+      dir === 'next' ? Office.Index.Next : Office.Index.Previous,
+      Office.GoToType.Index, function() {}
+    );
+  } catch(e) {}
+}
+
+// ── INIT ──────────────────────────────────────────────
+function init() {
+  if (window.Office && Office.context && Office.context.document) {
+    _isOfficeEnv = true;
+    document.getElementById('btn-prev').style.display = 'inline-block';
+    document.getElementById('btn-next').style.display = 'inline-block';
+  }
+  fetch('data.json')
+    .then(function(r) { if (!r.ok) throw new Error(); return r.json(); })
+    .then(function(d) {
+      if (d && d.Q1) DATA = d;
+      // Set source date label
+      if (d && d._refreshedAt) {
+        var dt = new Date(d._refreshedAt);
+        var dd = ('0'+dt.getDate()).slice(-2);
+        var mm = ('0'+(dt.getMonth()+1)).slice(-2);
+        var yy = String(dt.getFullYear()).slice(-2);
+        document.getElementById('source-label').textContent = dd+'.'+mm+'.'+yy;
+      }
+      render();
+    })
+    .catch(function() { render(); });
+}
+
+var _initDone = false;
+function safeInit() {
+  if (_initDone) return;
+  _initDone = true;
+  init();
+}
+document.addEventListener('DOMContentLoaded', safeInit);
+</script>
+</body>
+</html>

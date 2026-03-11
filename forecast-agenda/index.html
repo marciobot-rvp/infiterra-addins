@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<base href="https://revops-vps.tail8c3986.ts.net/forecast-agenda/">
+<title>Infiterra — Agenda</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js" async></script>
+<style>
+  :root {
+    --navy:  #1B2A4A;
+    --coral: #ED3153;
+    --blue:  #5B7FA5;
+    --fog:   #F4F6F9;
+    --line:  #E2E8F0;
+    --muted: #7A8CA0;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    width: 100%; height: 100%;
+    font-family: 'DM Sans', sans-serif;
+    background: #fff;
+    color: var(--navy);
+    overflow: auto;
+  }
+
+  .slide {
+    width: 100%; height: 100%;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+  }
+
+  /* ── HEADER ── */
+  .slide-header {
+    background: var(--navy);
+    padding: 20px 52px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: relative;
+    overflow: hidden;
+  }
+  .slide-header::after {
+    content: '';
+    position: absolute;
+    right: -40px; top: -60px;
+    width: 220px; height: 220px;
+    background: radial-gradient(circle, rgba(237,49,83,0.1) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .header-left { display: flex; align-items: center; gap: 22px; }
+  .logo-svg { height: 20px; opacity: 0.9; }
+  .header-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.38);
+    font-family: 'DM Mono', monospace;
+    margin-bottom: 3px;
+  }
+  .header-title {
+    font-size: 28px;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: -0.3px;
+    line-height: 1;
+  }
+  .meta-pill {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.11);
+    border-radius: 20px;
+    padding: 5px 14px;
+    font-size: 12px;
+    color: rgba(255,255,255,0.6);
+    font-weight: 500;
+  }
+  .meta-pill .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--coral);
+    animation: blink 2.2s ease-in-out infinite;
+  }
+  @keyframes blink {
+    0%,100% { opacity:1; transform:scale(1); }
+    50%      { opacity:.45; transform:scale(.8); }
+  }
+
+  /* ── BODY ── */
+  .slide-body {
+    display: flex;
+    align-items: center;
+    padding: 0 52px;
+    background: #fff;
+    position: relative;
+    overflow: hidden;
+  }
+  .slide-body::before {
+    content: '';
+    position: absolute;
+    right: -60px; bottom: -60px;
+    width: 440px; height: 440px;
+    background: radial-gradient(circle, rgba(27,42,74,0.025) 0%, transparent 65%);
+    pointer-events: none;
+  }
+
+  .agenda-list {
+    width: 100%;
+  }
+
+  /* ── ITEM ── */
+  .agenda-item {
+    display: grid;
+    grid-template-columns: 96px 1fr auto;
+    align-items: center;
+    border-bottom: 1px solid var(--line);
+    cursor: pointer;
+    position: relative;
+    transition: background 0.16s ease;
+    text-decoration: none;
+    color: inherit;
+    animation: rise 0.45s ease both;
+  }
+  .agenda-item:first-child { border-top: 1px solid var(--line); }
+  .agenda-item:nth-child(1) { animation-delay: 0.04s; }
+  .agenda-item:nth-child(2) { animation-delay: 0.12s; }
+  .agenda-item:nth-child(3) { animation-delay: 0.20s; }
+  @keyframes rise {
+    from { opacity:0; transform:translateY(10px); }
+    to   { opacity:1; transform:translateY(0); }
+  }
+
+  .agenda-item:hover  { background: var(--fog); }
+  .agenda-item.active { background: var(--fog); }
+
+  /* coral accent bar */
+  .agenda-item::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: var(--coral);
+    transform: scaleY(0);
+    transform-origin: center;
+    transition: transform 0.18s ease;
+    border-radius: 0 2px 2px 0;
+  }
+  .agenda-item:hover::before,
+  .agenda-item.active::before { transform: scaleY(1); }
+
+  /* Number column */
+  .item-num {
+    font-size: 52px;
+    font-weight: 700;
+    color: var(--navy);
+    text-align: right;
+    /* gap between num col edge and text — right padding creates the separation */
+    padding: 28px 28px 28px 20px;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    opacity: 0.12;
+    transition: opacity 0.16s, color 0.16s;
+    user-select: none;
+    letter-spacing: -2px;
+  }
+  .agenda-item:hover .item-num,
+  .agenda-item.active .item-num {
+    opacity: 1;
+    color: var(--coral);
+  }
+
+  /* Divider line between number and text */
+  .item-divider {
+    width: 1px;
+    height: 36px;
+    background: var(--line);
+    margin-right: 28px;
+    flex-shrink: 0;
+    transition: background 0.16s;
+  }
+  .agenda-item:hover .item-divider,
+  .agenda-item.active .item-divider {
+    background: rgba(237,49,83,0.25);
+  }
+
+  /* Content */
+  .item-content {
+    padding: 28px 20px 28px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    /* the divider is inside item-content as first child */
+  }
+  .item-inner {
+    display: flex;
+    align-items: center;
+    gap: 28px;
+  }
+  .item-text { flex: 1; display: flex; flex-direction: column; gap: 5px; }
+
+  .item-title {
+    font-size: 21px;
+    font-weight: 600;
+    color: var(--navy);
+    letter-spacing: -0.2px;
+    line-height: 1.25;
+  }
+  .item-sub {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .item-sub-label {
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: 400;
+  }
+  .sub-chip {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--blue);
+    background: rgba(91,127,165,0.1);
+    border-radius: 3px;
+    padding: 2px 7px;
+    white-space: nowrap;
+  }
+
+  /* Badge */
+  .item-badge {
+    padding: 28px 36px 28px 12px;
+    display: flex;
+    align-items: center;
+  }
+  .badge-tag {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 5px 12px;
+    border-radius: 4px;
+    white-space: nowrap;
+    opacity: 0;
+    transform: translateX(6px);
+    transition: all 0.16s ease;
+  }
+  .agenda-item:hover .badge-tag,
+  .agenda-item.active .badge-tag {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  .badge-revops { background: rgba(27,42,74,0.07); color: var(--navy); }
+  .badge-reps   { background: rgba(237,49,83,0.08); color: var(--coral); }
+
+  /* ── FOOTER ── */
+  .slide-footer {
+    border-top: 1px solid var(--line);
+    padding: 11px 52px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .footer-tagline { font-size: 11px; color: var(--muted); font-style: italic; opacity: .65; }
+  .footer-nav { display: flex; align-items: center; gap: 6px; }
+  .nav-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--line); transition: all .15s; }
+  .nav-dot.current { background: var(--navy); width: 20px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<div class="slide">
+
+  <!-- HEADER -->
+  <div class="slide-header">
+    <div class="header-left">
+      <svg class="logo-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 404.47 46.054">
+        <defs><style>.w{fill:#fff}.r{fill:#ED3153}</style></defs>
+        <path class="w" d="M368.601-227.829c-8.741-16.133-21.798-25.385-35.822-25.385h-2.624c-1.297,0-1.559.262-1.559,1.559v17.309c0,1.297.262,1.559,1.559,1.559h2.624c6.774,0,12.334,6.459,15.045,10.31,6.333,8.991,9.965,21.872,9.965,35.34,0,20.757-8.38,36.246-16.685,42.387-1.384,1.023-3.317.835-4.477-.436l-97.085-106.356c-1.323-1.45-2.217-1.466-2.51-1.471-25.052,0-45.484,29.643-45.484,66.078,0,14.881,3.362,28.951,9.723,40.691,8.741,16.133,21.798,25.386,35.822,25.386h2.624c1.297,0,1.559-.262,1.559-1.559v-17.31c0-1.297-.262-1.559-1.559-1.559h-2.624c-6.774,0-12.334-6.459-15.045-10.31-6.333-8.991-9.965-21.872-9.965-35.339,0-21.677,8.734-36.188,16.214-42.028,1.384-1.079,3.364-.912,4.547.383l96.989,106.252c1.13,1.238,1.339,1.282,2.924,1.268,25.135,0,45.567-29.642,45.567-66.076,0-14.881-3.362-28.952-9.723-40.691Z"/>
+        <g>
+          <path class="w" d="M0,0h6.532s0,46.054,0,46.054H0S0,0,0,0Z"/>
+          <path class="w" d="M99.326,0h30.316s0,5.74,0,5.74h-23.784s0,14.684,0,14.684h20.873s0,5.74,0,5.74h-20.873s0,19.89,0,19.89h-6.532s0-46.054,0-46.054Z"/>
+          <path class="w" d="M143.586,0h6.532s0,46.054,0,46.054h-6.532s0-46.054,0-46.054Z"/>
+          <path class="w" d="M178.83,5.74h-14.767s0-5.74,0-5.74h36.066s0,5.74,0,5.74h-14.767s0,40.314,0,40.314h-6.532s0-40.314,0-40.314Z"/>
+          <path class="w" d="M214.075,0h31.38s0,5.74,0,5.74h-24.849s0,14.283,0,14.283h22.506s0,5.74,0,5.74h-22.506s0,14.55,0,14.55h25.204s0,5.74,0,5.74h-31.736s0-46.054,0-46.054Z"/>
+          <path class="w" d="M259.755,0h20.944c8.733,0,15.335,6.007,15.335,14.016,0,7.209-5.467,12.682-12.921,13.616l14.341,18.422h-8.094s-13.986-18.288-13.986-18.288h-9.088s0,18.288,0,18.288h-6.532s0-46.054,0-46.054ZM266.287,5.74v16.686s14.342,0,14.342,0c4.97,0,8.732-3.538,8.732-8.343,0-4.805-3.763-8.343-8.732-8.343h-14.342Z"/>
+          <path class="w" d="M311.4,0h20.944c8.733,0,15.335,6.007,15.335,14.016,0,7.209-5.467,12.682-12.921,13.616l14.341,18.422h-8.094s-13.986-18.288-13.986-18.288h-9.088s0,18.288,0,18.288h-6.532s0-46.054,0-46.054ZM317.932,5.74v16.686s14.342,0,14.342,0c4.97,0,8.732-3.538,8.732-8.343,0-4.805-3.763-8.343-8.732-8.343h-14.342Z"/>
+          <path class="w" d="M376.781,0h7.739s19.95,46.054,19.95,46.054h-7.171s-4.757-11.146-4.757-11.146h-23.997s-4.757,11.146-4.757,11.146h-6.958S376.781,0,376.781,0ZM390.128,29.234l-9.584-22.56-9.585,22.56h19.169Z"/>
+          <path class="r" d="M82.002,8.821C78.964,3.215,74.427,0,69.554,0h-.912c-.451,0-.542.091-.542.542v6.015c0,.451.091.542.542.542h.912c2.354,0,4.286,2.245,5.228,3.583,2.201,3.124,3.463,7.6,3.463,12.28,0,7.213-2.912,12.595-5.798,14.729-.481.356-1.153.29-1.556-.151L37.154.581c-.46-.504-.77-.509-.872-.511-8.706,0-15.805,10.301-15.805,22.962,0,5.171,1.168,10.06,3.379,14.14,3.038,5.606,7.575,8.821,12.448,8.821h.912c.451,0,.542-.091.542-.542v-6.015c0-.451-.091-.542-.542-.542h-.912c-2.354,0-4.286-2.245-5.228-3.583-2.201-3.124-3.463-7.6-3.463-12.28,0-7.533,3.035-12.575,5.634-14.604.481-.375,1.169-.317,1.58.133l33.703,36.922c.393.43.465.445,1.016.441,8.734,0,15.834-10.3,15.834-22.961,0-5.171-1.168-10.061-3.379-14.14Z"/>
+        </g>
+      </svg>
+      <div>
+        <div class="header-label">Sales Forecast Call</div>
+        <div class="header-title">Agenda</div>
+      </div>
+    </div>
+    <div class="meta-pill">
+      <span class="dot"></span>
+      <span id="call-date">—</span>
+    </div>
+  </div>
+
+  <!-- BODY -->
+  <div class="slide-body">
+    <div class="agenda-list" id="agenda-list"></div>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="slide-footer">
+    <button id="btn-prev" onclick="goToSlide('prev')" style="display:none; padding:4px 14px; border:1px solid #E2E8F0; border-radius:4px; cursor:pointer; background:#fff; font-size:12px; font-weight:600; color:#7A8CA0; font-family:'DM Sans',sans-serif;">&#9664; Prev</button>
+    <span class="footer-tagline">Subscription commerce transformed</span>
+    <div class="footer-nav">
+      <div class="nav-dot"></div>
+      <div class="nav-dot current"></div>
+      <div class="nav-dot"></div>
+      <div class="nav-dot"></div>
+    </div>
+    <button id="btn-next" onclick="goToSlide('next')" style="display:none; padding:4px 14px; border:1px solid #E2E8F0; border-radius:4px; cursor:pointer; background:#fff; font-size:12px; font-weight:600; color:#7A8CA0; font-family:'DM Sans',sans-serif;">Next &#9654;</button>
+  </div>
+
+</div>
+<script>
+// ── DATA ─────────────────────────────────────────────────────────────────────
+// Override by placing data/agenda.json next to this file on the static server.
+// Schema: { meeting_date?: "YYYY-MM-DD", items?: AgendaItem[] }
+// AgendaItem: { title, sub?: string[], ownerDisplay, badge: "revops"|"reps", href?: string }
+
+var DEFAULT_AGENDA = [
+  {
+    title: "Review Previous Action Points",
+    sub: [],
+    ownerDisplay: "Rev Ops",
+    badge: "revops"
+  },
+  {
+    title: "Rep-Level Snapshot",
+    sub: ["Coverage tracker", "Key milestones", "Talking points"],
+    ownerDisplay: "Rev Ops",
+    badge: "revops"
+  },
+  {
+    title: "Support Pillar Activation Matrix",
+    sub: ["ABM", "Solutions Consultant", "Product Marketing", "C-Suite / Exec"],
+    ownerDisplay: "Rev Ops",
+    badge: "revops"
+  }
+];
+
+// ── HELPERS ──────────────────────────────────────────────────────────────────
+function fmtDate(d) {
+  var M = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var D = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  return D[d.getDay()] + ' ' + d.getDate() + ' ' + M[d.getMonth()] + ' ' + d.getFullYear();
+}
+function esc(s) {
+  var el = document.createElement('div');
+  el.textContent = s || '';
+  return el.innerHTML;
+}
+
+// ── RENDER ───────────────────────────────────────────────────────────────────
+function render(items) {
+  var list = document.getElementById('agenda-list');
+  list.innerHTML = '';
+
+  items.forEach(function(item, i) {
+    var a = document.createElement('a');
+    a.className = 'agenda-item';
+    a.href = item.href || '#';
+
+    // Sub-chips HTML
+    var subHtml = '';
+    if (item.sub && item.sub.length) {
+      subHtml = '<div class="item-sub">' +
+        item.sub.map(function(s) {
+          return '<span class="sub-chip">' + esc(s) + '</span>';
+        }).join('') +
+      '</div>';
+    }
+
+    a.innerHTML =
+      '<div class="item-num">' + String(i + 1).padStart(2, '0') + '</div>' +
+      '<div class="item-content">' +
+        '<div class="item-inner">' +
+          '<div class="item-divider"></div>' +
+          '<div class="item-text">' +
+            '<div class="item-title">' + esc(item.title) + '</div>' +
+            subHtml +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="item-badge">' +
+        '<span class="badge-tag badge-' + (item.badge || 'revops') + '">' +
+          esc(item.ownerDisplay) +
+        '</span>' +
+      '</div>';
+
+    list.appendChild(a);
+  });
+}
+
+// ── SLIDE NAV (Office.js) ────────────────────────────────────────────────────
+function goToSlide(direction) {
+  if (!window.Office || !Office.context || !Office.context.document) return;
+  try {
+    Office.context.document.goToByIdAsync(
+      direction === 'next' ? Office.Index.Next : Office.Index.Previous,
+      Office.GoToType.Index,
+      function(result) {}
+    );
+  } catch (e) {}
+}
+function showSlideNav() {
+  if (window.Office && Office.context && Office.context.document) {
+    document.getElementById('btn-prev').style.display = 'inline-block';
+    document.getElementById('btn-next').style.display = 'inline-block';
+  }
+}
+
+// ── INIT ─────────────────────────────────────────────────────────────────────
+function init() {
+  showSlideNav();
+  document.getElementById('call-date').textContent = fmtDate(new Date());
+
+  fetch('data/agenda.json')
+    .then(function(r) { if (!r.ok) throw 0; return r.json(); })
+    .then(function(d) {
+      if (d.meeting_date) {
+        document.getElementById('call-date').textContent =
+          fmtDate(new Date(d.meeting_date + 'T00:00:00'));
+      }
+      render(d.items && d.items.length ? d.items : DEFAULT_AGENDA);
+    })
+    .catch(function() { render(DEFAULT_AGENDA); });
+}
+
+var _initDone = false;
+function safeInit() {
+  if (_initDone) return;
+  _initDone = true;
+  init();
+}
+document.addEventListener('DOMContentLoaded', safeInit);
+</script>
+</body>
+</html>
