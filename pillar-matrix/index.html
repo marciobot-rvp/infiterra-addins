@@ -57,8 +57,6 @@ var STATUS = {
   blocked: { label: "Blocked", bg: "#C0392B", text: "#fff" },
 };
 
-var mkP = function(status, note) { return { status: status, note: note || "" }; };
-
 var DEFAULT_PILLAR = { status: "none", note: "" };
 
 var ensurePillars = function(deal) {
@@ -120,6 +118,14 @@ var OWNER_MAP = {
 var normaliseRep = function(rep) { return OWNER_MAP[rep] || rep; };
 var categoryColor = function(cat) { return normaliseCategory(cat) === "Commit" ? { bg: "#1B2A4A", text: "#fff" } : { bg: "#5B7FA5", text: "#fff" }; };
 
+// ── Multi-select toggle helper ──
+// Returns a new Set with item toggled in/out
+var toggleSet = function(set, item) {
+  var next = new Set(set);
+  if (next.has(item)) { next.delete(item); } else { next.add(item); }
+  return next;
+};
+
 function PillarMatrix() {
   var _useState1 = useState(null); var deals = _useState1[0]; var setDeals = _useState1[1];
   var _useState2 = useState(false); var loaded = _useState2[0]; var setLoaded = _useState2[1];
@@ -127,8 +133,9 @@ function PillarMatrix() {
   var _useState4 = useState(null); var fetchError = _useState4[0]; var setFetchError = _useState4[1];
   var _useState5 = useState(null); var selectedDeal = _useState5[0]; var setSelectedDeal = _useState5[1];
   var _useState6 = useState(null); var editingCell = _useState6[0]; var setEditingCell = _useState6[1];
-  var _useState7 = useState("All"); var quarterFilter = _useState7[0]; var setQuarterFilter = _useState7[1];
-  var _useState8 = useState("All"); var categoryFilter = _useState8[0]; var setCategoryFilter = _useState8[1];
+  // Multi-select: empty Set = "All" (no restriction)
+  var _useState7 = useState(new Set()); var quarterFilter = _useState7[0]; var setQuarterFilter = _useState7[1];
+  var _useState8 = useState(new Set()); var categoryFilter = _useState8[0]; var setCategoryFilter = _useState8[1];
   var _useState9 = useState(null); var saveStatus = _useState9[0]; var setSaveStatus = _useState9[1];
   var _useState10 = useState(null); var lastSaved = _useState10[0]; var setLastSaved = _useState10[1];
   var _useState11 = useState(null); var analysedAt = _useState11[0]; var setAnalysedAt = _useState11[1];
@@ -156,17 +163,14 @@ function PillarMatrix() {
         fetchedDealsRef.current = processed;
         setAnalysedAt(data.analysedAt || null);
 
-        // Check localStorage for saved overrides
         try {
           var raw = localStorage.getItem(STORAGE_KEY);
           if (raw) {
             var parsed = JSON.parse(raw);
             if (parsed.deals && Array.isArray(parsed.deals)) {
-              // Merge: fetched data as base, localStorage overrides for locked statuses
               var LOCKED = { "requested": true, "planned": true, "active": true, "delivered": true, "blocked": true };
               var savedByName = {};
               parsed.deals.forEach(function(d) { savedByName[d.name] = d; });
-
               var merged = processed.map(function(incoming) {
                 var saved = savedByName[incoming.name];
                 if (!saved) return incoming;
@@ -174,15 +178,11 @@ function PillarMatrix() {
                 ["abm", "sc", "pmm", "csuite"].forEach(function(pk) {
                   var savedP = (saved.pillars || {})[pk];
                   var incP = incoming.pillars[pk];
-                  if (savedP && LOCKED[savedP.status]) {
-                    mergedPillars[pk] = savedP;
-                  } else {
-                    mergedPillars[pk] = incP;
-                  }
+                  if (savedP && LOCKED[savedP.status]) { mergedPillars[pk] = savedP; }
+                  else { mergedPillars[pk] = incP; }
                 });
                 return Object.assign({}, incoming, { pillars: mergedPillars });
               });
-
               setDeals(merged);
               setLastSaved(parsed.savedAt || null);
               setFetching(false);
@@ -219,6 +219,25 @@ function PillarMatrix() {
     }, 500);
     return function() { clearTimeout(t); };
   }, [deals, loaded]);
+
+  // Derive available quarter options from data (sorted chronologically)
+  var availableQuarters = useMemo(function() {
+    if (!deals) return [];
+    var seen = {};
+    deals.forEach(function(d) { if (d.quarter) seen[d.quarter] = true; });
+    var qs = Object.keys(seen);
+    // Sort: Q1, Q2, Q3, Q4, Q1 '27, Q2 '27, etc.
+    qs.sort(function(a, b) {
+      var parseQ = function(q) {
+        var m = q.match(/Q(\d)(?:\s+'(\d+))?/);
+        if (!m) return 0;
+        var yr = m[2] ? parseInt("20" + m[2]) : 2026;
+        return yr * 10 + parseInt(m[1]);
+      };
+      return parseQ(a) - parseQ(b);
+    });
+    return qs;
+  }, [deals]);
 
   var exportJSON = useCallback(function() {
     var data = {
@@ -321,39 +340,27 @@ function PillarMatrix() {
           var parsed = JSON.parse(ev.target.result);
           if (parsed.deals && Array.isArray(parsed.deals)) {
             var LOCKED = {"requested": true, "planned": true, "active": true, "delivered": true, "blocked": true};
-
             setDeals(function(prev) {
               var existingByName = {};
               prev.forEach(function(d) { existingByName[d.name] = d; });
-
               var merged = parsed.deals.map(function(incoming) {
                 ensurePillars(incoming);
                 var existing = existingByName[incoming.name];
                 if (!existing) return incoming;
-
                 var exPillars = existing.pillars || {};
                 var mergedPillars = {};
                 ["abm", "sc", "pmm", "csuite"].forEach(function(pk) {
                   var curr = exPillars[pk];
                   var inc = (incoming.pillars || {})[pk];
-                  if (curr && LOCKED[curr.status]) {
-                    mergedPillars[pk] = curr;
-                  } else if (inc) {
-                    mergedPillars[pk] = inc;
-                  } else if (curr) {
-                    mergedPillars[pk] = curr;
-                  }
+                  if (curr && LOCKED[curr.status]) { mergedPillars[pk] = curr; }
+                  else if (inc) { mergedPillars[pk] = inc; }
+                  else if (curr) { mergedPillars[pk] = curr; }
                 });
-
                 return Object.assign({}, incoming, {pillars: mergedPillars});
               });
-
               var incomingNames = {};
               parsed.deals.forEach(function(d) { incomingNames[d.name] = true; });
-              prev.forEach(function(d) {
-                if (!incomingNames[d.name]) merged.push(d);
-              });
-
+              prev.forEach(function(d) { if (!incomingNames[d.name]) merged.push(d); });
               return merged;
             });
             setSaveStatus("saved");
@@ -378,8 +385,10 @@ function PillarMatrix() {
   var filteredDeals = useMemo(function() {
     if (!deals) return [];
     var result = deals.filter(function(d) {
-      if (quarterFilter !== "All" && d.quarter !== quarterFilter) return false;
-      if (categoryFilter !== "All" && normaliseCategory(d.category) !== categoryFilter) return false;
+      // Quarter: empty set = show all; otherwise deal's quarter must be in set
+      if (quarterFilter.size > 0 && !quarterFilter.has(d.quarter)) return false;
+      // Category: empty set = show all; otherwise deal's normalised category must be in set
+      if (categoryFilter.size > 0 && !categoryFilter.has(normaliseCategory(d.category))) return false;
       if (searchTerm) {
         var term = searchTerm.toLowerCase();
         var nameMatch = (d.name || "").toLowerCase().indexOf(term) >= 0;
@@ -391,15 +400,9 @@ function PillarMatrix() {
 
     result.sort(function(a, b) {
       var dir = sortDir === "asc" ? 1 : -1;
-      if (sortField === "amount") {
-        return dir * ((a.amount_home_currency || 0) - (b.amount_home_currency || 0));
-      }
-      if (sortField === "closeDate") {
-        return dir * ((a.closeDate || "").localeCompare(b.closeDate || ""));
-      }
-      if (sortField === "rep") {
-        return dir * (normaliseRep(a.rep).localeCompare(normaliseRep(b.rep)));
-      }
+      if (sortField === "amount") return dir * ((a.amount_home_currency || 0) - (b.amount_home_currency || 0));
+      if (sortField === "closeDate") return dir * ((a.closeDate || "").localeCompare(b.closeDate || ""));
+      if (sortField === "rep") return dir * (normaliseRep(a.rep).localeCompare(normaliseRep(b.rep)));
       return dir * ((a.name || "").localeCompare(b.name || ""));
     });
 
@@ -463,6 +466,48 @@ function PillarMatrix() {
     return "\u20AC0";
   };
 
+  // ── Filter button styles ──
+  var qBtnStyle = function(q) {
+    var active = quarterFilter.has(q);
+    return {
+      padding: "7px 14px", border: active ? "none" : "1.5px solid #D0D0D0",
+      cursor: "pointer", fontSize: 13, fontWeight: 600, borderRadius: 6,
+      background: active ? "#1B2A4A" : "#F4F4F4",
+      color: active ? "#fff" : "#555",
+      transition: "all 0.15s",
+      boxShadow: active ? "0 1px 4px rgba(27,42,74,0.18)" : "none",
+    };
+  };
+  var allQBtnStyle = {
+    padding: "7px 14px", border: quarterFilter.size === 0 ? "none" : "1.5px solid #D0D0D0",
+    cursor: "pointer", fontSize: 13, fontWeight: 600, borderRadius: 6,
+    background: quarterFilter.size === 0 ? "#1B2A4A" : "#F4F4F4",
+    color: quarterFilter.size === 0 ? "#fff" : "#555",
+    transition: "all 0.15s",
+    boxShadow: quarterFilter.size === 0 ? "0 1px 4px rgba(27,42,74,0.18)" : "none",
+  };
+
+  var CATEGORY_OPTIONS = ["Commit", "Best Case", "Pipeline"];
+  var catBtnStyle = function(c) {
+    var active = categoryFilter.has(c);
+    return {
+      padding: "7px 14px", border: active ? "none" : "1.5px solid #D0D0D0",
+      cursor: "pointer", fontSize: 13, fontWeight: 600, borderRadius: 6,
+      background: active ? "#5B7FA5" : "#F4F4F4",
+      color: active ? "#fff" : "#555",
+      transition: "all 0.15s",
+      boxShadow: active ? "0 1px 4px rgba(91,127,165,0.22)" : "none",
+    };
+  };
+  var allCatBtnStyle = {
+    padding: "7px 14px", border: categoryFilter.size === 0 ? "none" : "1.5px solid #D0D0D0",
+    cursor: "pointer", fontSize: 13, fontWeight: 600, borderRadius: 6,
+    background: categoryFilter.size === 0 ? "#5B7FA5" : "#F4F4F4",
+    color: categoryFilter.size === 0 ? "#fff" : "#555",
+    transition: "all 0.15s",
+    boxShadow: categoryFilter.size === 0 ? "0 1px 4px rgba(91,127,165,0.22)" : "none",
+  };
+
   // --- Loading state ---
   if (fetching) {
     return (
@@ -521,27 +566,38 @@ function PillarMatrix() {
           </div>
         </div>
         <div className="header-controls" style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "flex-end" }}>
-          <div className="filter-row" style={{ display: "flex", gap: 8 }}>
-            {["All", "Q1", "Q2", "Q3", "Q4"].map(function(q) {
+
+          {/* Quarter filter — multi-select toggles */}
+          <div className="filter-row" style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <span style={{ fontSize: 11, color: "#999", marginRight: 2, whiteSpace: "nowrap" }}>Quarter</span>
+            <button onClick={function() { setQuarterFilter(new Set()); setSelectedDeal(null); }} style={allQBtnStyle}>
+              All
+            </button>
+            {availableQuarters.map(function(q) {
               return (
-                <button key={q} onClick={function() { setQuarterFilter(q); setSelectedDeal(null); }}
-                  style={{ padding: "7px 16px", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, borderRadius: 6,
-                    background: quarterFilter === q ? "#1B2A4A" : "#E8E8E8", color: quarterFilter === q ? "#fff" : "#555", transition: "all 0.15s" }}>
+                <button key={q} onClick={function() { setQuarterFilter(function(prev) { return toggleSet(prev, q); }); setSelectedDeal(null); }} style={qBtnStyle(q)}>
                   {q}
                 </button>
               );
             })}
-            <div style={{ width: 1, background: "#DDD", margin: "0 4px" }} />
-            {["All", "Commit", "Best Case", "Pipeline"].map(function(c) {
+          </div>
+
+          {/* Category filter — multi-select toggles */}
+          <div className="filter-row" style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <span style={{ fontSize: 11, color: "#999", marginRight: 2, whiteSpace: "nowrap" }}>Category</span>
+            <button onClick={function() { setCategoryFilter(new Set()); setSelectedDeal(null); }} style={allCatBtnStyle}>
+              All
+            </button>
+            {CATEGORY_OPTIONS.map(function(c) {
               return (
-                <button key={c} onClick={function() { setCategoryFilter(c); setSelectedDeal(null); }}
-                  style={{ padding: "7px 16px", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, borderRadius: 6,
-                    background: categoryFilter === c ? "#5B7FA5" : "#E8E8E8", color: categoryFilter === c ? "#fff" : "#555", transition: "all 0.15s" }}>
+                <button key={c} onClick={function() { setCategoryFilter(function(prev) { return toggleSet(prev, c); }); setSelectedDeal(null); }} style={catBtnStyle(c)}>
                   {c}
                 </button>
               );
             })}
           </div>
+
+          {/* Action buttons */}
           <div style={{ display: "flex", gap: 6 }}>
             <button onClick={refreshFromHubSpot} disabled={refreshing}
               style={{ padding: "6px 14px", border: "none", borderRadius: 6, background: refreshing ? "#95a5a6" : "#27AE60", cursor: refreshing ? "wait" : "pointer", fontSize: 12, fontWeight: 600, color: "#fff" }}>
